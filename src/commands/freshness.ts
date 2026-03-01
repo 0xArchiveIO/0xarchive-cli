@@ -41,19 +41,19 @@ export async function freshnessCommand(options: FreshnessOptions): Promise<void>
 
     if (format === 'pretty') {
       prettyHeader(`${options.symbol} Freshness (${exchange})`);
-      prettyField('Measured at', freshness.measuredAt);
+      prettyField('Measured at', (freshness as any).measuredAt);
       process.stdout.write('\n');
 
       const dataTypes: Array<{ name: string; info: { lastUpdated?: string; lagMs?: number } | undefined }> = [
-        { name: 'orderbook', info: freshness.orderbook },
-        { name: 'trades', info: freshness.trades },
-        { name: 'funding', info: freshness.funding },
-        { name: 'open_interest', info: freshness.openInterest },
+        { name: 'orderbook', info: (freshness as any).orderbook },
+        { name: 'trades', info: (freshness as any).trades },
+        { name: 'funding', info: (freshness as any).funding },
+        { name: 'open_interest', info: (freshness as any).openInterest },
       ];
 
       // Include liquidations if present (Hyperliquid only)
-      if (freshness.liquidations) {
-        dataTypes.push({ name: 'liquidations', info: freshness.liquidations });
+      if ((freshness as any).liquidations) {
+        dataTypes.push({ name: 'liquidations', info: (freshness as any).liquidations });
       }
 
       const rows = dataTypes.map((dt) => [
