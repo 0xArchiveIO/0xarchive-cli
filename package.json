@@ -1,6 +1,6 @@
 {
   "name": "@0xarchive/cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI for querying historical crypto market data from 0xArchive",
   "type": "module",
   "bin": {

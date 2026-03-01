@@ -1,5 +1,3 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import {
   resolveApiKey,
   validateExchange,
@@ -18,6 +16,8 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { parseTimestamp, parseLimit } from '../lib/time.js';
+import { writeOutputFile } from '../lib/file.js';
 
 interface TradesFetchOptions {
   exchange: string;
@@ -31,30 +31,11 @@ interface TradesFetchOptions {
   format: string;
 }
 
-function parseTimestamp(value: string, label: string): number | string {
-  // If it looks like an ISO date string, pass it through
-  if (/^\d{4}-\d{2}/.test(value)) return value;
-  // Otherwise treat as Unix ms
-  const n = parseInt(value, 10);
-  if (!Number.isInteger(n) || n <= 0) {
-    exitError(`--${label} must be a valid ISO date or Unix timestamp (ms)`, EXIT.VALIDATION);
-  }
-  return n;
-}
-
 export async function tradesFetchCommand(options: TradesFetchOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);
-
-  // Validate limit
-  let limit: number | undefined;
-  if (options.limit !== undefined) {
-    limit = parseInt(options.limit, 10);
-    if (!Number.isInteger(limit) || limit <= 0) {
-      exitError('--limit must be a positive integer', EXIT.VALIDATION);
-    }
-  }
+  const limit = parseLimit(options.limit);
 
   // Validate start/end pair
   const hasStart = options.start !== undefined;
@@ -78,44 +59,26 @@ export async function tradesFetchCommand(options: TradesFetchOptions): Promise<v
       );
     }
 
-    // Lighter: use recent trades
+    // Lighter/HIP-3: use recent trades
     return fetchRecent(exchange, options.symbol, limit, apiKey, format, options.out);
   }
 
-  // Range provided — validate start < end
+  // Range provided — parse and validate
   const start = parseTimestamp(options.start!, 'start');
   const end = parseTimestamp(options.end!, 'end');
 
-  const startMs = typeof start === 'string' ? new Date(start).getTime() : start;
-  const endMs = typeof end === 'string' ? new Date(end).getTime() : end;
-
-  if (startMs >= endMs) {
+  if (start >= end) {
     exitError('--start must be before --end', EXIT.VALIDATION);
   }
 
   return fetchRange(exchange, options.symbol, start, end, limit, options.cursor, apiKey, format, options.out);
 }
 
-function writeOutputFile(filePath: string, data: unknown): void {
-  try {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      exitError(`Output directory does not exist: ${dir}`, EXIT.VALIDATION);
-    }
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EACCES') {
-      exitError(`Permission denied writing to: ${filePath}`, EXIT.VALIDATION);
-    }
-    throw err;
-  }
-}
-
 async function fetchRange(
   exchange: Exchange,
   symbol: string,
-  start: number | string,
-  end: number | string,
+  start: number,
+  end: number,
   limit: number | undefined,
   cursor: string | undefined,
   apiKey: string,
@@ -128,15 +91,17 @@ async function fetchRange(
     const exchangeClient = getExchangeClient(client, exchange);
     const result = await exchangeClient.trades.list(symbol, { start, end, limit, cursor });
     const trades = result.data;
+    const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
 
     if (outPath) {
-      writeOutputFile(outPath, trades);
+      writeOutputFile(outPath, envelope);
       const summary = {
         written_to: outPath,
         records: trades.length,
         exchange,
         symbol,
         has_more: !!result.nextCursor,
+        nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Trades (${exchange})`);
@@ -150,7 +115,7 @@ async function fetchRange(
     } else if (format === 'pretty') {
       prettyPrintTrades(trades, symbol, exchange, result.nextCursor);
     } else {
-      outputJson({ data: trades, nextCursor: result.nextCursor ?? null });
+      outputJson(envelope);
     }
 
     process.exit(EXIT.SUCCESS);
@@ -172,9 +137,10 @@ async function fetchRecent(
   try {
     const exchangeClient = getExchangeClient(client, exchange);
     const trades = await exchangeClient.trades.recent(symbol, limit ?? 100);
+    const envelope = { data: trades };
 
     if (outPath) {
-      writeOutputFile(outPath, trades);
+      writeOutputFile(outPath, envelope);
       const summary = { written_to: outPath, records: trades.length, exchange, symbol };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Recent Trades (${exchange})`);
@@ -187,7 +153,7 @@ async function fetchRecent(
     } else if (format === 'pretty') {
       prettyPrintTrades(trades, symbol, exchange);
     } else {
-      outputJson({ data: trades });
+      outputJson(envelope);
     }
 
     process.exit(EXIT.SUCCESS);
@@ -228,7 +194,7 @@ function prettyPrintTrades(
     prettyDim(`... and ${trades.length - 20} more`);
   }
   if (nextCursor) {
-    prettyDim('More data available (use pagination)');
+    prettyDim('More data available (use --cursor to paginate)');
   }
   process.stdout.write('\n');
 }

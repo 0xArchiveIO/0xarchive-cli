@@ -1,10 +1,10 @@
 import { OxArchive } from '@0xarchive/sdk';
-import type { HyperliquidClient, LighterClient } from '@0xarchive/sdk';
+import type { HyperliquidClient, LighterClient, Hip3Client } from '@0xarchive/sdk';
 import { exitError, EXIT } from './output.js';
 
-export type Exchange = 'hyperliquid' | 'lighter';
+export type Exchange = 'hyperliquid' | 'lighter' | 'hip3';
 
-const VALID_EXCHANGES: Exchange[] = ['hyperliquid', 'lighter'];
+const VALID_EXCHANGES: Exchange[] = ['hyperliquid', 'lighter', 'hip3'];
 
 export function resolveApiKey(cliKey?: string): string {
   const key = cliKey || process.env.OXA_API_KEY;
@@ -35,6 +35,7 @@ export function createClient(apiKey: string): OxArchive {
 export function getExchangeClient(
   client: OxArchive,
   exchange: Exchange,
-): HyperliquidClient | LighterClient {
+): HyperliquidClient | LighterClient | Hip3Client {
+  if (exchange === 'hip3') return client.hyperliquid.hip3;
   return client[exchange];
 }

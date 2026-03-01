@@ -12,9 +12,9 @@ import {
   prettyTable,
   prettyDim,
   EXIT,
-  exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { parsePositiveInt } from '../lib/time.js';
 
 interface OrderbookGetOptions {
   exchange: string;
@@ -29,24 +29,8 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);
-
-  // Validate depth
-  let depth: number | undefined;
-  if (options.depth !== undefined) {
-    depth = parseInt(options.depth, 10);
-    if (!Number.isInteger(depth) || depth <= 0) {
-      exitError('--depth must be a positive integer', EXIT.VALIDATION);
-    }
-  }
-
-  // Validate timestamp
-  let timestamp: number | undefined;
-  if (options.timestamp !== undefined) {
-    timestamp = parseInt(options.timestamp, 10);
-    if (!Number.isInteger(timestamp) || timestamp <= 0) {
-      exitError('--timestamp must be a positive integer (Unix ms)', EXIT.VALIDATION);
-    }
-  }
+  const depth = parsePositiveInt(options.depth, 'depth');
+  const timestamp = parsePositiveInt(options.timestamp, 'timestamp');
 
   const client = createClient(apiKey);
 
@@ -70,14 +54,14 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
         const askRows = orderbook.asks
           .slice(0, 10)
           .reverse()
-          .map((l) => [l.px, l.sz, String(l.n)]);
+          .map((l: any) => [l.px, l.sz, String(l.n)]);
         prettyTable(['Price', 'Size', 'Orders'], askRows);
       }
 
       if (orderbook.bids.length > 0) {
         process.stdout.write('\n');
         prettyDim(`Bids (${orderbook.bids.length} levels)`);
-        const bidRows = orderbook.bids.slice(0, 10).map((l) => [l.px, l.sz, String(l.n)]);
+        const bidRows = orderbook.bids.slice(0, 10).map((l: any) => [l.px, l.sz, String(l.n)]);
         prettyTable(['Price', 'Size', 'Orders'], bidRows);
       }
       process.stdout.write('\n');
