@@ -12,15 +12,30 @@ import {
   prettyTable,
   prettyDim,
   EXIT,
+  exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parsePositiveInt } from '../lib/time.js';
+import { writeOutputFile } from '../lib/file.js';
+import { parsePositiveInt, parseTimestamp, parseLimit } from '../lib/time.js';
 
 interface OrderbookGetOptions {
   exchange: string;
   symbol: string;
   depth?: string;
   timestamp?: string;
+  apiKey?: string;
+  format: string;
+}
+
+interface OrderbookHistoryOptions {
+  exchange: string;
+  symbol: string;
+  start: string;
+  end: string;
+  depth?: string;
+  limit?: string;
+  cursor?: string;
+  out?: string;
   apiKey?: string;
   format: string;
 }
@@ -67,6 +82,71 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
       process.stdout.write('\n');
     } else {
       outputJson(orderbook);
+    }
+
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function orderbookHistoryCommand(options: OrderbookHistoryOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const exchange = validateExchange(options.exchange);
+  const apiKey = resolveApiKey(options.apiKey);
+  const depth = parsePositiveInt(options.depth, 'depth');
+  const limit = parseLimit(options.limit);
+  const start = parseTimestamp(options.start, 'start');
+  const end = parseTimestamp(options.end, 'end');
+
+  if (start >= end) {
+    exitError('--start must be before --end', EXIT.VALIDATION);
+  }
+
+  const client = createClient(apiKey);
+
+  try {
+    const exchangeClient = getExchangeClient(client, exchange);
+    const result = await exchangeClient.orderbook.history(options.symbol, {
+      start,
+      end,
+      depth,
+      limit,
+      cursor: options.cursor,
+    });
+    const snapshots = result.data;
+    const envelope = { data: snapshots, nextCursor: result.nextCursor ?? null };
+
+    if (options.out) {
+      writeOutputFile(options.out, envelope);
+    }
+
+    if (format === 'pretty') {
+      prettyHeader(`${options.symbol} Orderbook History (${exchange}) — ${snapshots.length} snapshots`);
+
+      if (snapshots.length === 0) {
+        prettyDim('No snapshots found.');
+      } else {
+        const preview = snapshots.slice(0, 20);
+        const rows = preview.map((ob: any) => [
+          ob.timestamp,
+          ob.midPrice ?? '—',
+          ob.spreadBps ?? '—',
+          String(ob.bids?.length ?? 0),
+          String(ob.asks?.length ?? 0),
+        ]);
+        prettyTable(['Timestamp', 'Mid Price', 'Spread (bps)', 'Bid Levels', 'Ask Levels'], rows);
+
+        if (snapshots.length > 20) {
+          prettyDim(`... and ${snapshots.length - 20} more`);
+        }
+        if (result.nextCursor) {
+          prettyDim('More data available (use --cursor to paginate)');
+        }
+      }
+      process.stdout.write('\n');
+    } else {
+      outputJson(envelope);
     }
 
     process.exit(EXIT.SUCCESS);

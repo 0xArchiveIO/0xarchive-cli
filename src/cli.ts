@@ -1,18 +1,21 @@
 import { Command } from 'commander';
 import { authTestCommand } from './commands/auth.js';
-import { orderbookGetCommand } from './commands/orderbook.js';
+import { orderbookGetCommand, orderbookHistoryCommand } from './commands/orderbook.js';
 import { tradesFetchCommand } from './commands/trades.js';
 import { freshnessCommand } from './commands/freshness.js';
 import { candlesCommand } from './commands/candles.js';
 import { fundingCurrentCommand, fundingHistoryCommand } from './commands/funding.js';
 import { oiCurrentCommand, oiHistoryCommand } from './commands/openinterest.js';
 import { instrumentsCommand } from './commands/instruments.js';
-import { liquidationsCommand } from './commands/liquidations.js';
+import { liquidationsCommand, liquidationsVolumeCommand, liquidationsUserCommand } from './commands/liquidations.js';
 import { summaryCommand } from './commands/summary.js';
 import { pricesCommand } from './commands/prices.js';
+import { ordersHistoryCommand, ordersFlowCommand, ordersTpslCommand } from './commands/orders.js';
+import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './commands/l4.js';
+import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 const EXCHANGE_DESC = 'Exchange: hyperliquid, lighter, or hip3';
 
@@ -60,6 +63,21 @@ orderbook
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(orderbookGetCommand);
+
+orderbook
+  .command('history')
+  .description('Get historical orderbook snapshots over a time range')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(orderbookHistoryCommand);
 
 // ── oxa trades fetch ────────────────────────────────────────────────────
 
@@ -166,13 +184,17 @@ program
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(instrumentsCommand);
 
-// ── oxa liquidations ────────────────────────────────────────────────────
+// ── oxa liquidations history / volume / user ────────────────────────────
 
-program
+const liquidations = program
   .command('liquidations')
-  .description('Get liquidation history (Hyperliquid only)')
+  .description('Liquidation data (Hyperliquid and HIP-3)');
+
+liquidations
+  .command('history')
+  .description('Get liquidation history')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
-  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH)')
+  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
@@ -180,6 +202,36 @@ program
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(liquidationsCommand);
+
+liquidations
+  .command('volume')
+  .description('Get pre-aggregated liquidation volume in time buckets')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Aggregation interval: 5m, 15m, 30m, 1h, 4h, 1d', '1h')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(liquidationsVolumeCommand);
+
+liquidations
+  .command('user')
+  .description('Get liquidations for a specific user address (Hyperliquid only)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--user <address>', 'User wallet address (e.g. 0x1234...)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--coin <coin>', 'Filter by coin symbol')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(liquidationsUserCommand);
 
 // ── oxa summary ─────────────────────────────────────────────────────────
 
@@ -218,5 +270,132 @@ program
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(freshnessCommand);
+
+// ── oxa orders history / flow / tpsl ────────────────────────────────────
+
+const orders = program
+  .command('orders')
+  .description('Order history and flow commands (Build+ / Pro+ tier)');
+
+orders
+  .command('history')
+  .description('Get order history with user attribution (Build+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
+  .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(ordersHistoryCommand);
+
+orders
+  .command('flow')
+  .description('Get order flow aggregation (Build+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Aggregation interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d', '1h')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(ordersFlowCommand);
+
+orders
+  .command('tpsl')
+  .description('Get TP/SL order history (Pro+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--triggered <bool>', 'Filter by triggered status: true or false')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(ordersTpslCommand);
+
+// ── oxa l4 get / diffs / history ────────────────────────────────────────
+
+const l4 = program
+  .command('l4')
+  .description('L4 order-level orderbook commands (Build+ / Pro+ tier)');
+
+l4
+  .command('get')
+  .description('Get L4 orderbook reconstruction at a timestamp (Pro+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l4GetCommand);
+
+l4
+  .command('diffs')
+  .description('Get L4 orderbook diffs (Build+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l4DiffsCommand);
+
+l4
+  .command('history')
+  .description('Get L4 orderbook checkpoints (Pro+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l4HistoryCommand);
+
+// ── oxa l3 get / history (Lighter only) ─────────────────────────────────
+
+const l3 = program
+  .command('l3')
+  .description('L3 order-level orderbook commands — Lighter only (Pro+ tier)');
+
+l3
+  .command('get')
+  .description('Get Lighter L3 orderbook snapshot (Pro+ tier)')
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l3GetCommand);
+
+l3
+  .command('history')
+  .description('Get historical Lighter L3 orderbook snapshots (Pro+ tier)')
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l3HistoryCommand);
 
 program.parse();

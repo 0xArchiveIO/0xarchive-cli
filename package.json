@@ -1,6 +1,6 @@
 {
   "name": "@0xarchive/cli",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "CLI for querying historical crypto market data from 0xArchive",
   "type": "module",
   "bin": {
@@ -39,7 +39,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@0xarchive/sdk": "^0.9.2",
+    "@0xarchive/sdk": "^1.2.0",
     "commander": "^13.0.0",
     "chalk": "^5.4.0"
   },

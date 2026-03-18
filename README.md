@@ -89,6 +89,26 @@ oxa orderbook get --exchange <exchange> --symbol <symbol> [options]
 | `--timestamp` | No | Historical timestamp (Unix ms) |
 | `--format` | No | `json` (default) or `pretty` |
 
+### `oxa orderbook history`
+
+Get historical orderbook snapshots over a time range.
+
+```bash
+oxa orderbook history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Coin symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--depth` | No | Number of price levels per side |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
 ### `oxa trades fetch`
 
 Fetch trade history for a symbol.
@@ -192,22 +212,62 @@ List all available instruments/coins on an exchange.
 oxa instruments --exchange <exchange> [--format <format>]
 ```
 
-### `oxa liquidations`
+### `oxa liquidations history`
 
-Get liquidation history (Hyperliquid only, data from May 2025).
+Get liquidation history (Hyperliquid and HIP-3, data from May 2025 for Hyperliquid, Feb 2026 for HIP-3).
 
 ```bash
-oxa liquidations --exchange hyperliquid --symbol <symbol> --start <time> --end <time> [options]
+oxa liquidations history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
 ```
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--exchange` | Yes | Must be `hyperliquid` |
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
 | `--symbol` | Yes | Coin symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa liquidations volume`
+
+Get pre-aggregated liquidation volume in time-bucketed intervals. Returns total, long, and short USD volumes per bucket.
+
+```bash
+oxa liquidations volume --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--symbol` | Yes | Coin symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--interval` | No | Aggregation: `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa liquidations user`
+
+Get liquidations for a specific user address (Hyperliquid only).
+
+```bash
+oxa liquidations user --exchange hyperliquid --user <address> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Must be `hyperliquid` |
+| `--user` | Yes | User wallet address (e.g. 0x1234...) |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--coin` | No | Filter by coin symbol |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
 ### `oxa summary`
@@ -244,6 +304,157 @@ Check data freshness across all data types for a symbol.
 ```bash
 oxa freshness --exchange <exchange> --symbol <symbol> [--format <format>]
 ```
+
+### `oxa orders history`
+
+Get order history with user attribution. Requires Build+ tier.
+
+```bash
+oxa orders history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--user` | No | Filter by user wallet address |
+| `--status` | No | Filter by status: `open`, `filled`, `cancelled`, `expired` |
+| `--order-type` | No | Filter by type: `limit`, `market`, `trigger`, `tpsl` |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa orders flow`
+
+Get order flow aggregation. Requires Build+ tier.
+
+```bash
+oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--interval` | No | Aggregation interval: `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
+| `--limit` | No | Maximum records to return |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa orders tpsl`
+
+Get TP/SL (take-profit / stop-loss) order history. Requires Pro+ tier.
+
+```bash
+oxa orders tpsl --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--user` | No | Filter by user wallet address |
+| `--triggered` | No | Filter by triggered status: `true` or `false` |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l4 get`
+
+Get an L4 order-level orderbook reconstruction at a point in time. Requires Pro+ tier.
+
+```bash
+oxa l4 get --exchange <exchange> --symbol <symbol> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--timestamp` | No | Historical timestamp (Unix ms or ISO 8601) |
+| `--depth` | No | Number of price levels per side |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l4 diffs`
+
+Get L4 orderbook diffs (individual order-level changes) over a time range. Requires Build+ tier.
+
+```bash
+oxa l4 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l4 history`
+
+Get L4 orderbook checkpoints (full snapshots at periodic intervals) over a time range. Requires Pro+ tier.
+
+```bash
+oxa l4 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l3 get`
+
+Get a Lighter L3 order-level orderbook snapshot. Lighter only. Requires Pro+ tier.
+
+```bash
+oxa l3 get --symbol <symbol> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
+| `--depth` | No | Number of price levels per side |
+| `--format` | No | `json` (default) or `pretty` |
+
+**Note:** L3 commands are Lighter-only and do not accept an `--exchange` flag.
+
+### `oxa l3 history`
+
+Get historical Lighter L3 orderbook snapshots over a time range. Lighter only. Requires Pro+ tier.
+
+```bash
+oxa l3 history --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--depth` | No | Number of price levels per side |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
 
 ## API Key
 
@@ -313,7 +524,25 @@ oxa funding current --exchange lighter --symbol BTC
 
 # Gate on data freshness before acting
 oxa freshness --exchange hyperliquid --symbol BTC | jq '.orderbook.lagMs < 5000'
+
+# Get L4 order-level book reconstruction
+oxa l4 get --exchange hyperliquid --symbol BTC --format pretty
+
+# Stream L4 diffs for microstructure analysis
+oxa l4 diffs --exchange hyperliquid --symbol BTC \
+  --start 2026-03-01T00:00:00Z --end 2026-03-01T01:00:00Z --out l4_diffs.json
+
+# Query order flow aggregation
+oxa orders flow --exchange hyperliquid --symbol ETH \
+  --start 2026-03-01T00:00:00Z --end 2026-03-02T00:00:00Z --interval 1h
+
+# Get Lighter L3 orderbook snapshot
+oxa l3 get --symbol BTC --format pretty
 ```
+
+## Bulk Data Downloads
+
+For large-scale data exports (full order books, complete trade history, etc.), use the S3 Parquet bulk export available at [0xarchive.io/data](https://0xarchive.io/data). The Data Explorer lets you select time ranges, symbols, and data types, then download compressed Parquet files directly. The CLI is best for point queries and moderate datasets; for bulk needs, the Data Explorer is significantly faster.
 
 ## Links
 
