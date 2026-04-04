@@ -385,7 +385,7 @@ oxa l4 get --exchange <exchange> --symbol <symbol> [options]
 
 ### `oxa l4 diffs`
 
-Get L4 orderbook diffs (individual order-level changes) over a time range. Requires Build+ tier.
+Get L4 orderbook diffs (individual order-level changes) over a time range. Requires Pro+ tier.
 
 ```bash
 oxa l4 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -408,6 +408,61 @@ Get L4 orderbook checkpoints (full snapshots at periodic intervals) over a time 
 
 ```bash
 oxa l4 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l2 get`
+
+Get an L2 full-depth orderbook snapshot derived from L4 data. Requires Build+ tier.
+
+```bash
+oxa l2 get --exchange <exchange> --symbol <symbol> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--timestamp` | No | Historical timestamp (Unix ms or ISO 8601) |
+| `--depth` | No | Number of price levels per side |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l2 history`
+
+Get L2 full-depth orderbook history over a time range. Requires Build+ tier.
+
+```bash
+oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Exchange name |
+| `--symbol` | Yes | Trading symbol |
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--depth` | No | Number of price levels per side |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa l2 diffs`
+
+Get L2 tick-level diffs over a time range. Requires Pro+ tier.
+
+```bash
+oxa l2 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
 ```
 
 | Option | Required | Description |
@@ -535,6 +590,9 @@ oxa l4 diffs --exchange hyperliquid --symbol BTC \
 # Query order flow aggregation
 oxa orders flow --exchange hyperliquid --symbol ETH \
   --start 2026-03-01T00:00:00Z --end 2026-03-02T00:00:00Z --interval 1h
+
+# Get L2 full-depth orderbook
+oxa l2 get --exchange hyperliquid --symbol BTC --format pretty
 
 # Get Lighter L3 orderbook snapshot
 oxa l3 get --symbol BTC --format pretty
