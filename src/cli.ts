@@ -12,10 +12,11 @@ import { summaryCommand } from './commands/summary.js';
 import { pricesCommand } from './commands/prices.js';
 import { ordersHistoryCommand, ordersFlowCommand, ordersTpslCommand } from './commands/orders.js';
 import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './commands/l4.js';
+import { l2GetCommand, l2HistoryCommand, l2DiffsCommand } from './commands/l2.js';
 import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 
 const EXCHANGE_DESC = 'Exchange: hyperliquid, lighter, or hip3';
 
@@ -343,7 +344,7 @@ l4
 
 l4
   .command('diffs')
-  .description('Get L4 orderbook diffs (Build+ tier)')
+  .description('Get L4 orderbook diffs (Pro+ tier)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -368,6 +369,52 @@ l4
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(l4HistoryCommand);
+
+// ── oxa l2 get / history / diffs ────────────────────────────────────────
+
+const l2 = program
+  .command('l2')
+  .description('L2 full-depth orderbook commands derived from L4 data (Build+ / Pro+ tier)');
+
+l2
+  .command('get')
+  .description('Get L2 full-depth orderbook at a timestamp (Build+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l2GetCommand);
+
+l2
+  .command('history')
+  .description('Get L2 full-depth orderbook checkpoints (Build+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l2HistoryCommand);
+
+l2
+  .command('diffs')
+  .description('Get L2 tick-level orderbook diffs (Pro+ tier)')
+  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(l2DiffsCommand);
 
 // ── oxa l3 get / history (Lighter only) ─────────────────────────────────
 
