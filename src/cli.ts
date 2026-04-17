@@ -16,7 +16,7 @@ import { l2GetCommand, l2HistoryCommand, l2DiffsCommand } from './commands/l2.js
 import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 
 const EXCHANGE_DESC = 'Exchange: hyperliquid, lighter, or hip3';
 
