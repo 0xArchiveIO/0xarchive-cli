@@ -1,8 +1,12 @@
 # @0xarchive/cli
 
-Command-line interface for querying historical crypto market data from [0xArchive](https://0xarchive.io). Built for AI agents and automated workflows — access orderbooks, trades, candles, funding rates, open interest, liquidations, and more across Hyperliquid, Lighter.xyz, and HIP-3 directly from your terminal.
+Terminal-first access to 0xArchive market data.
 
-## Installation
+0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps live under the Hyperliquid namespace; the CLI exposes `--exchange hip3` as a convenience scope for those markets.
+
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, and Hyperliquid/HIP-3 L4 routes.
+
+## Install
 
 ```bash
 npm install -g @0xarchive/cli
@@ -14,47 +18,43 @@ Or run without installing:
 npx @0xarchive/cli auth test --exchange hyperliquid --symbol BTC
 ```
 
-## Quick Start
+## First Request
 
 ```bash
-# Set your API key (get one at https://0xarchive.io)
+# Create a free account, then copy an API key:
+# https://www.0xarchive.io/signup
 export OXA_API_KEY="0xa_your_api_key"
 
 # Verify your key works
 oxa auth test
 
-# Get BTC orderbook
+# Fetch the current Hyperliquid BTC order book
 oxa orderbook get --exchange hyperliquid --symbol BTC --format pretty
 
-# Get 1h candles for the last day
-oxa candles --exchange hyperliquid --symbol BTC \
-  --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
-
-# Get current funding rate
-oxa funding current --exchange hyperliquid --symbol BTC
-
-# Get market summary (price, funding, OI, volume in one call)
-oxa summary --exchange hyperliquid --symbol BTC
-
-# List all available instruments
-oxa instruments --exchange hyperliquid
-
-# Get recent trades from Lighter
+# Fetch recent Lighter trades
 oxa trades fetch --exchange lighter --symbol BTC --limit 50
 
-# Check data freshness
-oxa freshness --exchange hyperliquid --symbol BTC
+# Fetch Hyperliquid HIP-3 builder-perp candles
+oxa candles --exchange hip3 --symbol km:US500 \
+  --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
 ```
 
-## Exchanges
+## Choose Your Next Path
 
-Three exchanges are supported across all commands:
+- First authenticated route: [Quick Start](https://www.0xarchive.io/docs/quick-start)
+- Full CLI guide: [CLI docs](https://www.0xarchive.io/docs/cli)
+- Claude Code, GPT Codex, and coding-agent workflows: [AI Clients](https://www.0xarchive.io/docs/ai-clients)
+- File-based pulls: [Data Catalog](https://www.0xarchive.io/data)
+- Plans and limits: [Pricing](https://www.0xarchive.io/pricing)
+- Machine-readable docs: [llms.txt](https://www.0xarchive.io/llms.txt) and [OpenAPI](https://www.0xarchive.io/openapi.json)
 
-| Exchange | Flag | Symbols |
-|----------|------|---------|
+## Venue Scopes
+
+| Scope | Flag | Symbols |
+| --- | --- | --- |
 | Hyperliquid | `--exchange hyperliquid` | `BTC`, `ETH`, `SOL`, etc. |
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
-| HIP-3 | `--exchange hip3` | `km:US500`, `km:TSLA`, etc. (case-sensitive) |
+| Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 
 ## Commands
 
@@ -556,7 +556,7 @@ oxa trades fetch --exchange hyperliquid --symbol BTC \
 
 ## For AI Agents
 
-The CLI is designed for agent pipelines:
+The CLI is designed for Claude Code, GPT Codex, CI, cron, notebook setup, and other coding-agent pipelines:
 
 ```bash
 # Verify API access
@@ -598,9 +598,9 @@ oxa l2 get --exchange hyperliquid --symbol BTC --format pretty
 oxa l3 get --symbol BTC --format pretty
 ```
 
-## Bulk Data Downloads
+## Data Catalog
 
-For large-scale data exports (full order books, complete trade history, etc.), use the S3 Parquet bulk export available at [0xarchive.io/data](https://0xarchive.io/data). The Data Explorer lets you select time ranges, symbols, and data types, then download compressed Parquet files directly. The CLI is best for point queries and moderate datasets; for bulk needs, the Data Explorer is significantly faster.
+For large-scale data exports (full order books, complete trade history, etc.), use the [Data Catalog](https://www.0xarchive.io/data). It lets you choose markets, datasets, and date ranges, see a live quote, and export zstd-compressed Parquet. The CLI is best for point queries and moderate datasets; the Data Catalog is the file-export path.
 
 ## Links
 

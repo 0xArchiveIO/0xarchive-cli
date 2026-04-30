@@ -1,7 +1,7 @@
 {
   "name": "@0xarchive/cli",
   "version": "1.4.0",
-  "description": "CLI for querying historical crypto market data from 0xArchive",
+  "description": "Terminal-first 0xArchive client for Hyperliquid and Lighter.xyz market data, including Hyperliquid HIP-3",
   "type": "module",
   "bin": {
     "oxa": "./dist/cli.js"
@@ -21,10 +21,13 @@
   "keywords": [
     "0xarchive",
     "cli",
+    "market-data",
     "hyperliquid",
-    "lighter",
+    "lighterxyz",
     "orderbook",
     "trades",
+    "replay",
+    "agents",
     "historical-data",
     "crypto"
   ],
@@ -32,9 +35,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/0xArchiveIO/sdk-typescript"
+    "url": "https://github.com/0xArchiveIO/0xarchive-cli"
   },
-  "homepage": "https://0xarchive.io/docs/sdks",
+  "homepage": "https://www.0xarchive.io/github-cli",
+  "bugs": {
+    "url": "https://github.com/0xArchiveIO/0xarchive-cli/issues"
+  },
   "engines": {
     "node": ">=18"
   },
