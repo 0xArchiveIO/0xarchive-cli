@@ -3,6 +3,7 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  rejectHip4,
 } from '../lib/client.js';
 import {
   outputJson,
@@ -34,6 +35,7 @@ interface CandlesOptions {
 export async function candlesCommand(options: CandlesOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  rejectHip4(exchange, 'candles');
   const apiKey = resolveApiKey(options.apiKey);
   const limit = parseLimit(options.limit);
   const interval = validateCandleInterval(options.interval);

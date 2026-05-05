@@ -88,7 +88,7 @@ async function fetchRange(
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.trades.list(symbol, { start, end, limit, cursor });
     const trades = result.data;
     const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
@@ -135,7 +135,7 @@ async function fetchRecent(
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const trades = await exchangeClient.trades.recent(symbol, limit ?? 100);
     const envelope = { data: trades };
 

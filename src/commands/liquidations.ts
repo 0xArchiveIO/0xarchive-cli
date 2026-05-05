@@ -58,6 +58,12 @@ interface LiquidationsUserOptions {
 const LIQUIDATION_EXCHANGES = ['hyperliquid', 'hip3'];
 
 function validateLiquidationExchange(exchange: string): string {
+  if (exchange === 'hip4') {
+    exitError(
+      'HIP-4 has no liquidations endpoint. Use --exchange hl or hip3.',
+      EXIT.VALIDATION,
+    );
+  }
   if (!LIQUIDATION_EXCHANGES.includes(exchange)) {
     exitError(
       `Liquidations are only available for hyperliquid and hip3. Got "${exchange}".`,

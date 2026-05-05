@@ -54,7 +54,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.priceHistory(options.symbol, {
       start,
       end,

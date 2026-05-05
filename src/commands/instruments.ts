@@ -27,7 +27,7 @@ export async function instrumentsCommand(options: InstrumentsOptions): Promise<v
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const instruments = await exchangeClient.instruments.list();
 
     if (format === 'pretty') {
@@ -53,6 +53,17 @@ export async function instrumentsCommand(options: InstrumentsOptions): Promise<v
           i.openInterest ?? '—',
         ]);
         prettyTable(['Coin', 'Namespace', 'Ticker', 'Mark Price', 'OI'], rows);
+      } else if (exchange === 'hip4') {
+        // mark_price for HIP-4 is implied probability (0..1), not USD.
+        const rows = instruments.map((i: any) => [
+          i.coin ?? '—',
+          String(i.outcomeId ?? '—'),
+          String(i.side ?? '—'),
+          i.sideName ?? '—',
+          i.name ?? '—',
+          i.isSettled ? 'settled' : 'live',
+        ]);
+        prettyTable(['Coin', 'Outcome', 'Side', 'Side Name', 'Name', 'Status'], rows);
       } else {
         // Hyperliquid
         const rows = instruments.map((i: any) => [

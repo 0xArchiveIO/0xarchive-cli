@@ -31,13 +31,19 @@ interface L2GetOptions {
 export async function l2GetCommand(options: L2GetOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  if (exchange === 'hip4') {
+    exitError(
+      'HIP-4 has no derived L2 endpoint. Use `oxa orderbook get --exchange hip4 --symbol %23<N>` for the native L2 orderbook.',
+      EXIT.VALIDATION,
+    );
+  }
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
 
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = {};
     if (options.timestamp) sdkParams.timestamp = parseTimestamp(options.timestamp, 'timestamp');
     if (depth) sdkParams.depth = depth;
@@ -80,6 +86,12 @@ interface L2HistoryOptions {
 export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  if (exchange === 'hip4') {
+    exitError(
+      'HIP-4 has no derived L2 endpoint. Use `oxa orderbook history --exchange hip4 --symbol %23<N>` for the native L2 orderbook history.',
+      EXIT.VALIDATION,
+    );
+  }
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -93,7 +105,7 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (depth) sdkParams.depth = depth;
@@ -158,6 +170,12 @@ interface L2DiffsOptions {
 export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  if (exchange === 'hip4') {
+    exitError(
+      'HIP-4 has no derived L2 endpoint. Use `oxa orderbook history --exchange hip4 --symbol %23<N>` for the native L2 orderbook history.',
+      EXIT.VALIDATION,
+    );
+  }
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -170,7 +188,7 @@ export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;

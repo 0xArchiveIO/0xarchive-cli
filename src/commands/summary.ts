@@ -27,7 +27,7 @@ export async function summaryCommand(options: SummaryOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const summary = await exchangeClient.summary(options.symbol);
 
     if (format === 'pretty') {

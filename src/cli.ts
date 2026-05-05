@@ -14,11 +14,38 @@ import { ordersHistoryCommand, ordersFlowCommand, ordersTpslCommand } from './co
 import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './commands/l4.js';
 import { l2GetCommand, l2HistoryCommand, l2DiffsCommand } from './commands/l2.js';
 import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
+import { outcomesListCommand, outcomesGetCommand } from './commands/outcomes.js';
+import {
+  hip4OrderbookGet,
+  hip4OrderbookHistory,
+  hip4Trades,
+  hip4Instruments,
+  hip4OiCurrent,
+  hip4OiHistory,
+  hip4Summary,
+  hip4Freshness,
+  hip4Prices,
+  hip4OrdersHistory,
+  hip4OrdersFlow,
+  hip4OrdersTpsl,
+  hip4L4Get,
+  hip4L4Diffs,
+  hip4L4History,
+  hip4OutcomesList,
+  hip4OutcomesGet,
+} from './commands/hip4.js';
+import {
+  streamLiquidationsCommand,
+  streamTradesCommand,
+  streamOrderbookCommand,
+} from './commands/stream.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.4.0';
+const VERSION = '1.6.0';
 
-const EXCHANGE_DESC = 'Exchange: hyperliquid, lighter, or hip3';
+const EXCHANGE_DESC =
+  'Exchange: hyperliquid, lighter, hip3, or hip4. ' +
+  'For hip4, coins are bare numerics (e.g. "0", "1", "42"); legacy "#0" / "%230" forms are also accepted. mark_price is an implied probability (0..1), not a USD price.';
 
 const program = new Command()
   .name('oxa')
@@ -444,5 +471,279 @@ l3
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(l3HistoryCommand);
+
+// ── oxa outcomes (HIP-4 only) ───────────────────────────────────────────
+
+const outcomes = program
+  .command('outcomes')
+  .description('HIP-4 outcome markets (binary outcome metadata) — Build+ tier');
+
+outcomes
+  .command('list')
+  .description('List HIP-4 outcome markets with optional settled filter')
+  .option('--settled <state>', 'Filter: true, false, or all', 'all')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(outcomesListCommand);
+
+outcomes
+  .command('get <outcome_id>')
+  .description('Get a single HIP-4 outcome market detail (includes aggregated_oi)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action((outcomeId: string, options: { apiKey?: string; format: string }) =>
+    outcomesGetCommand({ outcomeId, ...options }),
+  );
+
+// ── oxa hip4 ────────────────────────────────────────────────────────────
+// Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`).
+// HIP-4 has no funding/liquidations/candles by design, so those verbs are
+// intentionally absent.
+
+const hip4 = program
+  .command('hip4')
+  .description('HIP-4 outcome markets (binary prediction markets). Coins are bare numerics, e.g. "0", "1".');
+
+const hip4Outcomes = hip4
+  .command('outcomes')
+  .description('HIP-4 outcome metadata');
+
+hip4Outcomes
+  .command('list')
+  .description('List HIP-4 outcome markets')
+  .option('--settled <state>', 'Filter: true, false, or all', 'all')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OutcomesList);
+
+hip4Outcomes
+  .command('get <outcome_id>')
+  .description('Get a single HIP-4 outcome market detail (includes aggregated_oi)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action((outcomeId: string, options: { apiKey?: string; format: string }) =>
+    hip4OutcomesGet(outcomeId, options),
+  );
+
+hip4
+  .command('instruments')
+  .description('List HIP-4 instruments (one row per outcome side)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Instruments);
+
+const hip4Orderbook = hip4
+  .command('orderbook')
+  .description('HIP-4 L2 orderbook commands');
+
+hip4Orderbook
+  .command('get <coin>')
+  .description('Get current HIP-4 L2 orderbook (e.g. "oxa hip4 orderbook get 0")')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OrderbookGet);
+
+hip4Orderbook
+  .command('history <coin>')
+  .description('Get historical HIP-4 L2 orderbook snapshots')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OrderbookHistory);
+
+hip4
+  .command('trades <coin>')
+  .description('Get HIP-4 trades (e.g. "oxa hip4 trades 0 --recent" or "oxa hip4 trades 0 --start ... --end ...")')
+  .option('--recent', 'Fetch the most recent trades (omit --start / --end)')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Trades);
+
+const hip4Oi = hip4
+  .command('oi')
+  .description('HIP-4 open interest commands (per-side; mark_price is implied probability 0..1)');
+
+hip4Oi
+  .command('current <coin>')
+  .description('Get current HIP-4 open interest for a coin')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OiCurrent);
+
+hip4Oi
+  .command('history <coin>')
+  .description('Get HIP-4 open interest history for a coin')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Aggregation interval: 5m, 15m, 30m, 1h, 4h, 1d')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OiHistory);
+
+hip4
+  .command('summary <coin>')
+  .description('Get HIP-4 24h summary (probability, volume, OI)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Summary);
+
+hip4
+  .command('freshness <coin>')
+  .description('Check HIP-4 data freshness for a coin')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Freshness);
+
+hip4
+  .command('prices <coin>')
+  .description('Get HIP-4 implied-probability history (mark/oracle/mid in [0,1])')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Aggregation interval: 5m, 15m, 30m, 1h, 4h, 1d')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Prices);
+
+const hip4Orders = hip4
+  .command('orders')
+  .description('HIP-4 order history / flow / TP-SL (Build+ / Pro+ tier)');
+
+hip4Orders
+  .command('history <coin>')
+  .description('Get HIP-4 order history with user attribution (Build+ tier)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
+  .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OrdersHistory);
+
+hip4Orders
+  .command('flow <coin>')
+  .description('Get HIP-4 order flow aggregation (Build+ tier)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Aggregation interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d', '1h')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OrdersFlow);
+
+hip4Orders
+  .command('tpsl <coin>')
+  .description('Get HIP-4 TP/SL order history (Pro+ tier)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--triggered <bool>', 'Filter by triggered status: true or false')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4OrdersTpsl);
+
+const hip4L4 = hip4
+  .command('l4')
+  .description('HIP-4 L4 order-level commands (Pro+ tier)');
+
+hip4L4
+  .command('get <coin>')
+  .description('Get HIP-4 L4 orderbook reconstruction (Pro+ tier)')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4L4Get);
+
+hip4L4
+  .command('diffs <coin>')
+  .description('Get HIP-4 L4 orderbook diffs (Pro+ tier)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4L4Diffs);
+
+hip4L4
+  .command('history <coin>')
+  .description('Get HIP-4 L4 orderbook checkpoints (Build+ tier)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4L4History);
+
+// ── oxa stream <channel> <symbol> ───────────────────────────────────────
+// Realtime WebSocket streaming. Emits one JSON record per stdout line
+// (NDJSON) until the user hits Ctrl-C or --duration-ms expires.
+
+const stream = program
+  .command('stream')
+  .description('Stream realtime market data over WebSocket (Build+ tier; requires Node 22+)');
+
+stream
+  .command('liquidations <symbol>')
+  .description(
+    'Stream realtime liquidation events. Defaults to Hyperliquid; pass `--exchange hip3` for HIP-3.',
+  )
+  .option('--exchange <exchange>', 'hyperliquid (default) or hip3')
+  .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
+  .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
+  .action(streamLiquidationsCommand);
+
+stream
+  .command('trades <symbol>')
+  .description('Stream realtime trades for a symbol')
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, or lighter')
+  .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
+  .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
+  .action(streamTradesCommand);
+
+stream
+  .command('orderbook <symbol>')
+  .description('Stream realtime L2 orderbook updates for a symbol')
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, or lighter')
+  .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
+  .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
+  .action(streamOrderbookCommand);
 
 program.parse();

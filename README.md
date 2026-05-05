@@ -2,9 +2,9 @@
 
 Terminal-first access to 0xArchive market data.
 
-0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps live under the Hyperliquid namespace; the CLI exposes `--exchange hip3` as a convenience scope for those markets.
+0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps and HIP-4 outcome markets live under the Hyperliquid namespace; the CLI exposes `--exchange hip3` and `--exchange hip4` as convenience scopes for those markets.
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, and Hyperliquid/HIP-3 L4 routes.
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, and HIP-4 outcome markets.
 
 ## Install
 
@@ -37,6 +37,16 @@ oxa trades fetch --exchange lighter --symbol BTC --limit 50
 # Fetch Hyperliquid HIP-3 builder-perp candles
 oxa candles --exchange hip3 --symbol km:US500 \
   --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
+
+# List active HIP-4 outcome markets, then inspect one
+oxa hip4 outcomes list --settled false
+oxa hip4 outcomes get 0
+
+# Pull the current HIP-4 orderbook for outcome 0 / side 0
+oxa hip4 orderbook get 0
+
+# Stream live Hyperliquid liquidations (Build+ tier; requires Node 22+)
+oxa stream liquidations BTC
 ```
 
 ## Choose Your Next Path
@@ -55,6 +65,7 @@ oxa candles --exchange hip3 --symbol km:US500 \
 | Hyperliquid | `--exchange hyperliquid` | `BTC`, `ETH`, `SOL`, etc. |
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
+| Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. No funding, liquidations, or candles. |
 
 ## Commands
 
@@ -305,6 +316,34 @@ Check data freshness across all data types for a symbol.
 oxa freshness --exchange <exchange> --symbol <symbol> [--format <format>]
 ```
 
+### `oxa outcomes list` (HIP-4 only)
+
+List HIP-4 outcome markets (binary outcome metadata). Build+ tier.
+
+```bash
+oxa outcomes list [--settled true|false|all] [--limit <n>] [--cursor <cursor>] [--format <format>]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--settled` | No | Filter: `true`, `false`, or `all` (default) |
+| `--limit` | No | Maximum records to return |
+| `--cursor` | No | Pagination cursor from previous response |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa outcomes get` (HIP-4 only)
+
+Get a single HIP-4 outcome market detail. The response includes `aggregated_oi` (latest both-sides OI snapshot). Build+ tier.
+
+```bash
+oxa outcomes get <outcome_id> [--format <format>]
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `outcome_id` | Yes | Numeric outcome id (e.g. `0`, `1`, `42`) |
+| `--format` | No | `json` (default) or `pretty` |
+
 ### `oxa orders history`
 
 Get order history with user attribution. Requires Build+ tier.
@@ -492,6 +531,54 @@ oxa l3 get --symbol <symbol> [options]
 
 **Note:** L3 commands are Lighter-only and do not accept an `--exchange` flag.
 
+### `oxa hip4 ...` (HIP-4 outcome markets)
+
+Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`, `42`). HIP-4 has no funding, liquidations, or candles by design. Equivalent to `--exchange hip4` on the shared verbs, but reads more naturally for outcome-market workflows.
+
+```bash
+# Discovery
+oxa hip4 instruments
+oxa hip4 outcomes list --settled false
+oxa hip4 outcomes get 0
+
+# Market data
+oxa hip4 orderbook get 0 --depth 10
+oxa hip4 orderbook history 0 --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
+oxa hip4 trades 0 --recent --limit 50
+oxa hip4 trades 0 --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
+oxa hip4 oi current 0
+oxa hip4 oi history 0 --start 2026-04-01T00:00:00Z --end 2026-04-02T00:00:00Z --interval 1h
+oxa hip4 prices 0 --start 2026-04-01T00:00:00Z --end 2026-04-02T00:00:00Z --interval 1h
+oxa hip4 summary 0
+oxa hip4 freshness 0
+
+# Order-level (Build+ / Pro+ tier)
+oxa hip4 orders history 0 --start ... --end ...
+oxa hip4 orders flow    0 --start ... --end ... --interval 1h
+oxa hip4 orders tpsl    0 --start ... --end ...
+oxa hip4 l4 get      0
+oxa hip4 l4 diffs    0 --start ... --end ...
+oxa hip4 l4 history  0 --start ... --end ...
+```
+
+### `oxa stream ...` (realtime WebSocket)
+
+Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. Requires Build+ tier (no Free-tier WS access) and Node.js 22+ for the global `WebSocket`.
+
+```bash
+# Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
+oxa stream liquidations BTC
+oxa stream liquidations km:US500 --exchange hip3
+
+# Realtime trades (channel data is the same fill row used by historical /trades, with `is_liquidation: true` on liquidation fills)
+oxa stream trades BTC
+
+# Realtime orderbook
+oxa stream orderbook BTC --duration-ms 60000
+```
+
+Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with `is_liquidation: true`. To stop early, send SIGINT (Ctrl-C) or pass `--duration-ms`.
+
 ### `oxa l3 history`
 
 Get historical Lighter L3 orderbook snapshots over a time range. Lighter only. Requires Pro+ tier.
@@ -596,6 +683,14 @@ oxa l2 get --exchange hyperliquid --symbol BTC --format pretty
 
 # Get Lighter L3 orderbook snapshot
 oxa l3 get --symbol BTC --format pretty
+
+# Stream live liquidations (NDJSON to stdout) for 60s, then exit
+oxa stream liquidations BTC --duration-ms 60000
+
+# HIP-4 outcome markets (bare numeric coins)
+oxa hip4 outcomes list --settled false
+oxa hip4 orderbook get 0 --depth 10
+oxa hip4 trades 0 --recent --limit 50
 ```
 
 ## Data Catalog

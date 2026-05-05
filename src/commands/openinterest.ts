@@ -43,7 +43,7 @@ export async function oiCurrentCommand(options: OICurrentOptions): Promise<void>
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const oi = await exchangeClient.openInterest.current(options.symbol);
 
     if (format === 'pretty') {
@@ -90,7 +90,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.openInterest.history(options.symbol, {
       start,
       end,
