@@ -3,6 +3,7 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  rejectHip4,
 } from '../lib/client.js';
 import {
   outputJson,
@@ -39,6 +40,7 @@ interface FundingHistoryOptions {
 export async function fundingCurrentCommand(options: FundingCurrentOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  rejectHip4(exchange, 'funding');
   const apiKey = resolveApiKey(options.apiKey);
   const client = createClient(apiKey);
 
@@ -65,6 +67,7 @@ export async function fundingCurrentCommand(options: FundingCurrentOptions): Pro
 export async function fundingHistoryCommand(options: FundingHistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  rejectHip4(exchange, 'funding');
   const apiKey = resolveApiKey(options.apiKey);
   const limit = parseLimit(options.limit);
   const interval = validateInterval(options.interval);

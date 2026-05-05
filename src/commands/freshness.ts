@@ -36,7 +36,7 @@ export async function freshnessCommand(options: FreshnessOptions): Promise<void>
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const freshness = await exchangeClient.freshness(options.symbol);
 
     if (format === 'pretty') {

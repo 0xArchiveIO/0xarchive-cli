@@ -37,7 +37,7 @@ export async function l4GetCommand(options: L4GetOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = {};
     if (options.timestamp) sdkParams.timestamp = parseTimestamp(options.timestamp, 'timestamp');
     if (depth) sdkParams.depth = depth;
@@ -89,7 +89,7 @@ export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
@@ -165,7 +165,7 @@ export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void>
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;

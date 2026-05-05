@@ -50,7 +50,7 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const orderbook = await exchangeClient.orderbook.get(options.symbol, {
       depth,
       timestamp,
@@ -106,7 +106,7 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.orderbook.history(options.symbol, {
       start,
       end,

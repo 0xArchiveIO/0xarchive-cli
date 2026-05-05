@@ -27,7 +27,7 @@ export async function authTestCommand(options: AuthTestOptions): Promise<void> {
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
+    const exchangeClient = getExchangeClient(client, exchange, apiKey);
     await exchangeClient.freshness(options.symbol);
 
     const result = {
