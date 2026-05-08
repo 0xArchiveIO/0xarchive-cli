@@ -94,7 +94,7 @@ async function fetchRange(
     const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
 
     if (outPath) {
-      writeOutputFile(outPath, envelope);
+      writeOutputFile(outPath, trades);
       const summary = {
         written_to: outPath,
         records: trades.length,
@@ -140,7 +140,7 @@ async function fetchRecent(
     const envelope = { data: trades };
 
     if (outPath) {
-      writeOutputFile(outPath, envelope);
+      writeOutputFile(outPath, trades);
       const summary = { written_to: outPath, records: trades.length, exchange, symbol };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Recent Trades (${exchange})`);

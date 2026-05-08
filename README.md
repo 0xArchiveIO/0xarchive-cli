@@ -2,9 +2,9 @@
 
 Terminal-first access to 0xArchive market data.
 
-0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps and HIP-4 outcome markets live under the Hyperliquid namespace; the CLI exposes `--exchange hip3` and `--exchange hip4` as convenience scopes for those markets.
+0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets.
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, and HIP-4 outcome markets.
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
 
 ## Install
 
@@ -45,6 +45,10 @@ oxa hip4 outcomes get 0
 # Pull the current HIP-4 orderbook for outcome 0 / side 0
 oxa hip4 orderbook get 0
 
+# List Hyperliquid Spot pairs and inspect one
+oxa spot pairs
+oxa spot pair HYPE-USDC
+
 # Stream live Hyperliquid liquidations (Build+ tier; requires Node 22+)
 oxa stream liquidations BTC
 ```
@@ -66,6 +70,7 @@ oxa stream liquidations BTC
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. No funding, liquidations, or candles. |
+| Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 294 pairs. Trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, liquidations, or candles. |
 
 ## Commands
 
@@ -561,6 +566,52 @@ oxa hip4 l4 diffs    0 --start ... --end ...
 oxa hip4 l4 history  0 --start ... --end ...
 ```
 
+### `oxa spot ...` (Hyperliquid Spot)
+
+Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, liquidations, or candles by design (those are perpetual constructs).
+
+Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. Tier gating mirrors HIP-3: Pro+ for L4 and order lifecycle, Build+ for everything else.
+
+```bash
+# Discovery
+oxa spot pairs
+oxa spot pair HYPE-USDC
+
+# Market data
+oxa spot orderbook HYPE-USDC --depth 10
+oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
+oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z --user 0xabc...
+
+# L4 / order lifecycle (Pro+ tier; live from 2026-05-05)
+oxa spot l4 HYPE-USDC
+oxa spot orders HYPE-USDC --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
+
+# TWAP statuses (Build+ tier; live from 2026-05-05)
+oxa spot twap HYPE-USDC --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
+oxa spot twap-user 0xabc... --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
+
+# Per-symbol freshness across orderbook, trades, L4, TWAP
+oxa spot freshness HYPE-USDC
+```
+
+| Subcommand | Description | Tier |
+|---|---|---|
+| `oxa spot pairs` | List every active spot pair (294) | Build+ |
+| `oxa spot pair <symbol>` | Get a single spot pair | Build+ |
+| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Build+ |
+| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Build+ |
+| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | Pro+ |
+| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | Pro+ |
+| `oxa spot twap <symbol>` | TWAP statuses for a single pair | Build+ |
+| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across all pairs | Build+ |
+| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | Build+ |
+
+For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Example:
+
+```bash
+oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
+```
+
 ### `oxa stream ...` (realtime WebSocket)
 
 Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. Requires Build+ tier (no Free-tier WS access) and Node.js 22+ for the global `WebSocket`.
@@ -691,6 +742,12 @@ oxa stream liquidations BTC --duration-ms 60000
 oxa hip4 outcomes list --settled false
 oxa hip4 orderbook get 0 --depth 10
 oxa hip4 trades 0 --recent --limit 50
+
+# Hyperliquid Spot (dashed canonical symbols)
+oxa spot pairs | jq '.[].symbol' | head
+oxa spot pair HYPE-USDC | jq '{symbol, baseTokenName, quoteTokenName}'
+oxa spot orderbook HYPE-USDC --depth 5
+oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z --out hype_trades.json
 ```
 
 ## Data Catalog

@@ -38,10 +38,22 @@ import {
   streamLiquidationsCommand,
   streamTradesCommand,
   streamOrderbookCommand,
+  streamGenericCommand,
 } from './commands/stream.js';
+import {
+  spotPairsList,
+  spotPairGet,
+  spotOrderbookGet,
+  spotTrades,
+  spotL4Get,
+  spotOrdersHistory,
+  spotTwapBySymbol,
+  spotTwapByUser,
+  spotFreshness,
+} from './commands/spot.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, lighter, hip3, or hip4. ' +
@@ -745,5 +757,124 @@ stream
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
   .action(streamOrderbookCommand);
+
+// Generic channel subscription. Use this for spot (spot_orderbook,
+// spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap) and any other
+// raw WebSocket channel name not covered by the dedicated verbs above.
+stream
+  .command('subscribe <channel> <symbol>')
+  .description(
+    'Subscribe to a raw WebSocket channel by name. ' +
+      'For spot: spot_orderbook, spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap. ' +
+      'Symbols are dashed canonical for spot (HYPE-USDC, PURR-USDC).',
+  )
+  .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
+  .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
+  .action(streamGenericCommand);
+
+// ── oxa spot ────────────────────────────────────────────────────────────
+// Hyperliquid Spot. Symbols are dashed canonical (HYPE-USDC, PURR-USDC).
+// No funding, OI, liquidations, or candles by design (perp-only constructs).
+// Coverage: trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05.
+
+const spot = program
+  .command('spot')
+  .description(
+    'Hyperliquid Spot market data. Symbols are dashed canonical (HYPE-USDC, PURR-USDC). ' +
+      'No funding, OI, liquidations, or candles by design.',
+  );
+
+spot
+  .command('pairs')
+  .description('List every active spot pair (294 pairs)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotPairsList);
+
+spot
+  .command('pair <symbol>')
+  .description('Get a specific spot pair (e.g. "oxa spot pair HYPE-USDC")')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotPairGet);
+
+spot
+  .command('orderbook <symbol>')
+  .description('Get current spot L2 orderbook (live from 2026-05-05)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotOrderbookGet);
+
+spot
+  .command('trades <symbol>')
+  .description('Fetch spot trade history (S3 backfill from 2025-03-22). Requires --start and --end.')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotTrades);
+
+spot
+  .command('l4 <symbol>')
+  .description('Get spot L4 orderbook reconstruction (Pro+ tier; live from 2026-05-05)')
+  .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
+  .option('--depth <n>', 'Number of price levels per side')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotL4Get);
+
+spot
+  .command('orders <symbol>')
+  .description('Get spot order lifecycle history (Pro+ tier; live from 2026-05-05)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--user <address>', 'Filter by user wallet address')
+  .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
+  .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotOrdersHistory);
+
+spot
+  .command('twap <symbol>')
+  .description('Get spot TWAP statuses for a pair (Build+; live from 2026-05-05)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotTwapBySymbol);
+
+spot
+  .command('twap-user <user>')
+  .description('Get spot TWAP statuses for a user wallet across all pairs (Build+)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotTwapByUser);
+
+spot
+  .command('freshness <symbol>')
+  .description('Check spot data freshness across orderbook, trades, L4, TWAP')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotFreshness);
 
 program.parse();

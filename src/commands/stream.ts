@@ -26,7 +26,52 @@ interface StreamOptions {
   url?: string;
 }
 
-type Channel = 'liquidations' | 'hip3_liquidations' | 'trades' | 'orderbook';
+// Allow-listed channels for the dedicated `oxa stream <verb>` commands.
+// The `oxa stream subscribe <channel>` form bypasses this list and forwards
+// any channel name to the server (used for spot_orderbook, spot_trades,
+// spot_l4_diffs, spot_l4_orders, spot_twap and any future channels).
+type Channel =
+  | 'liquidations'
+  | 'hip3_liquidations'
+  | 'trades'
+  | 'orderbook'
+  | 'spot_orderbook'
+  | 'spot_trades'
+  | 'spot_l4_diffs'
+  | 'spot_l4_orders'
+  | 'spot_twap';
+
+const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
+  'liquidations',
+  'hip3_liquidations',
+  'trades',
+  'orderbook',
+  'candles',
+  'open_interest',
+  'funding',
+  'ticker',
+  'all_tickers',
+  'l4_diffs',
+  'l4_orders',
+  'hip3_l4_diffs',
+  'hip3_l4_orders',
+  'lighter_orderbook',
+  'lighter_trades',
+  'lighter_candles',
+  'lighter_open_interest',
+  'lighter_funding',
+  'lighter_l3_orderbook',
+  'hip3_orderbook',
+  'hip3_trades',
+  'hip3_candles',
+  'hip3_open_interest',
+  'hip3_funding',
+  'spot_orderbook',
+  'spot_trades',
+  'spot_l4_diffs',
+  'spot_l4_orders',
+  'spot_twap',
+]);
 
 function resolveChannel(rawChannel: string, exchange?: string): Channel {
   const ch = rawChannel.toLowerCase();
@@ -35,8 +80,15 @@ function resolveChannel(rawChannel: string, exchange?: string): Channel {
     return 'liquidations';
   }
   if (ch === 'hip3_liquidations') return 'hip3_liquidations';
-  if (ch === 'trades') return 'trades';
-  if (ch === 'orderbook') return 'orderbook';
+  if (ch === 'trades') {
+    if (exchange === 'spot') return 'spot_trades';
+    return 'trades';
+  }
+  if (ch === 'orderbook') {
+    if (exchange === 'spot') return 'spot_orderbook';
+    return 'orderbook';
+  }
+  if (ch.startsWith('spot_')) return ch as Channel;
   exitError(`Unknown stream channel "${rawChannel}".`, EXIT.VALIDATION);
 }
 
@@ -53,10 +105,11 @@ async function streamChannel(
   rawChannel: string,
   symbol: string,
   options: StreamOptions,
+  preResolved?: string,
 ): Promise<void> {
   const format = validateFormat(options.format);
   const apiKey = resolveApiKey(options.apiKey);
-  const channel = resolveChannel(rawChannel, options.exchange);
+  const channel = preResolved ?? resolveChannel(rawChannel, options.exchange);
   const durationMs = parseDuration(options.durationMs);
 
   if (typeof (globalThis as any).WebSocket !== 'function') {
@@ -129,7 +182,7 @@ async function streamChannel(
     exitError(`websocket error: ${message}`, EXIT.NETWORK);
   });
 
-  ws.addEventListener('close', (event: CloseEvent) => {
+  ws.addEventListener('close', (event: any) => {
     if (timer) clearTimeout(timer);
     if (!opened) {
       exitError(
@@ -161,4 +214,19 @@ export async function streamTradesCommand(symbol: string, options: StreamOptions
 
 export async function streamOrderbookCommand(symbol: string, options: StreamOptions): Promise<void> {
   return streamChannel('orderbook', symbol, options);
+}
+
+export async function streamGenericCommand(
+  channel: string,
+  symbol: string,
+  options: StreamOptions,
+): Promise<void> {
+  const ch = String(channel).toLowerCase();
+  if (!VALID_GENERIC_CHANNELS.has(ch)) {
+    exitError(
+      `Unknown stream channel "${channel}". Valid channels: ${Array.from(VALID_GENERIC_CHANNELS).sort().join(', ')}.`,
+      EXIT.VALIDATION,
+    );
+  }
+  return streamChannel(ch, symbol, options, ch);
 }
