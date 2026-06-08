@@ -4,12 +4,12 @@ Terminal-first access to 0xArchive market data.
 
 0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets.
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, GPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
 
 ## Install
 
 ```bash
-npm install -g @0xarchive/cli
+npm install @0xarchive/cli
 ```
 
 Or run without installing:
@@ -57,7 +57,7 @@ oxa stream liquidations BTC
 
 - First authenticated route: [Quick Start](https://www.0xarchive.io/docs/quick-start)
 - Full CLI guide: [CLI docs](https://www.0xarchive.io/docs/cli)
-- Claude Code, GPT Codex, and coding-agent workflows: [AI Clients](https://www.0xarchive.io/docs/ai-clients)
+- Claude Code, ChatGPT Codex, and coding-agent workflows: [AI Clients](https://www.0xarchive.io/docs/ai-clients)
 - File-based pulls: [Data Catalog](https://www.0xarchive.io/data)
 - Plans and limits: [Pricing](https://www.0xarchive.io/pricing)
 - Machine-readable docs: [llms.txt](https://www.0xarchive.io/llms.txt) and [OpenAPI](https://www.0xarchive.io/openapi.json)
@@ -694,7 +694,7 @@ oxa trades fetch --exchange hyperliquid --symbol BTC \
 
 ## For AI Agents
 
-The CLI is designed for Claude Code, GPT Codex, CI, cron, notebook setup, and other coding-agent pipelines:
+The CLI is designed for Claude Code, ChatGPT Codex, CI, cron, notebook setup, and other coding-agent pipelines. For richer typed context inside the agent, pair the CLI with the [0xArchive skill](https://github.com/0xArchiveIO/0xarchive-skill), which installs into `.claude/skills/0xarchive` (Claude Code) or `.agents/skills/0xarchive` (ChatGPT Codex). If you manage skills through OpenClaw, `openclaw install 0xarchive` is the optional helper. With the skill loaded, an agent can run `oxa auth test` to verify access and then issue any market-data command below:
 
 ```bash
 # Verify API access
@@ -756,11 +756,13 @@ For large-scale data exports (full order books, complete trade history, etc.), u
 
 ## Links
 
-- [API Docs](https://0xarchive.io/docs)
-- [TypeScript SDK](https://npmjs.com/package/@0xarchive/sdk)
+- [API Docs](https://www.0xarchive.io/docs)
 - [Python SDK](https://pypi.org/project/oxarchive/)
-- [MCP Server](https://github.com/0xArchiveIO/0xarchive-mcp)
-- [ClawHub Skill](https://clawhub.ai/0xFantomMenace/0xarchive)
+- [TypeScript SDK](https://npmjs.com/package/@0xarchive/sdk)
+- [Rust SDK](https://crates.io/crates/oxarchive)
+- [MCP Server](https://npmjs.com/package/@0xarchive/mcp-server)
+- [0xArchive Skill](https://github.com/0xArchiveIO/0xarchive-skill)
+- [Examples](https://github.com/0xArchiveIO/examples)
 
 ## License
 
