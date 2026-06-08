@@ -760,7 +760,7 @@ For large-scale data exports (full order books, complete trade history, etc.), u
 - [Python SDK](https://pypi.org/project/oxarchive/)
 - [TypeScript SDK](https://npmjs.com/package/@0xarchive/sdk)
 - [Rust SDK](https://crates.io/crates/oxarchive)
-- [MCP Server](https://npmjs.com/package/@0xarchive/mcp-server)
+- [MCP Server](https://mcp.0xarchive.io) (or [self-host](https://npmjs.com/package/@0xarchive/mcp-server))
 - [0xArchive Skill](https://github.com/0xArchiveIO/0xarchive-skill)
 - [Examples](https://github.com/0xArchiveIO/examples)
 
