@@ -49,7 +49,7 @@ oxa hip4 orderbook get 0
 oxa spot pairs
 oxa spot pair HYPE-USDC
 
-# Stream live Hyperliquid liquidations (Build+ tier; requires Node 22+)
+# Stream live Hyperliquid liquidations (requires Node 22+)
 oxa stream liquidations BTC
 ```
 
@@ -323,7 +323,7 @@ oxa freshness --exchange <exchange> --symbol <symbol> [--format <format>]
 
 ### `oxa outcomes list` (HIP-4 only)
 
-List HIP-4 outcome markets (binary outcome metadata). Build+ tier.
+List HIP-4 outcome markets (binary outcome metadata).
 
 ```bash
 oxa outcomes list [--settled true|false|all] [--limit <n>] [--cursor <cursor>] [--format <format>]
@@ -338,7 +338,7 @@ oxa outcomes list [--settled true|false|all] [--limit <n>] [--cursor <cursor>] [
 
 ### `oxa outcomes get` (HIP-4 only)
 
-Get a single HIP-4 outcome market detail. The response includes `aggregated_oi` (latest both-sides OI snapshot). Build+ tier.
+Get a single HIP-4 outcome market detail. The response includes `aggregated_oi` (latest both-sides OI snapshot).
 
 ```bash
 oxa outcomes get <outcome_id> [--format <format>]
@@ -351,7 +351,7 @@ oxa outcomes get <outcome_id> [--format <format>]
 
 ### `oxa orders history`
 
-Get order history with user attribution. Requires Build+ tier.
+Get order history with user attribution.
 
 ```bash
 oxa orders history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -373,7 +373,7 @@ oxa orders history --exchange <exchange> --symbol <symbol> --start <time> --end 
 
 ### `oxa orders flow`
 
-Get order flow aggregation. Requires Build+ tier.
+Get order flow aggregation.
 
 ```bash
 oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -392,7 +392,7 @@ oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 
 ### `oxa orders tpsl`
 
-Get TP/SL (take-profit / stop-loss) order history. Requires Pro+ tier.
+Get TP/SL (take-profit / stop-loss) order history.
 
 ```bash
 oxa orders tpsl --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -413,7 +413,7 @@ oxa orders tpsl --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 
 ### `oxa l4 get`
 
-Get an L4 order-level orderbook reconstruction at a point in time. Requires Pro+ tier.
+Get an L4 order-level orderbook reconstruction at a point in time.
 
 ```bash
 oxa l4 get --exchange <exchange> --symbol <symbol> [options]
@@ -429,7 +429,7 @@ oxa l4 get --exchange <exchange> --symbol <symbol> [options]
 
 ### `oxa l4 diffs`
 
-Get L4 orderbook diffs (individual order-level changes) over a time range. Requires Pro+ tier.
+Get L4 orderbook diffs (individual order-level changes) over a time range.
 
 ```bash
 oxa l4 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -448,7 +448,7 @@ oxa l4 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time>
 
 ### `oxa l4 history`
 
-Get L4 orderbook checkpoints (full snapshots at periodic intervals) over a time range. Requires Pro+ tier.
+Get L4 orderbook checkpoints (full snapshots at periodic intervals) over a time range.
 
 ```bash
 oxa l4 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -467,7 +467,7 @@ oxa l4 history --exchange <exchange> --symbol <symbol> --start <time> --end <tim
 
 ### `oxa l2 get`
 
-Get an L2 full-depth orderbook snapshot derived from L4 data. Requires Build+ tier.
+Get an L2 full-depth orderbook snapshot derived from L4 data.
 
 ```bash
 oxa l2 get --exchange <exchange> --symbol <symbol> [options]
@@ -483,7 +483,7 @@ oxa l2 get --exchange <exchange> --symbol <symbol> [options]
 
 ### `oxa l2 history`
 
-Get L2 full-depth orderbook history over a time range. Requires Build+ tier.
+Get L2 full-depth orderbook history over a time range.
 
 ```bash
 oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -503,7 +503,7 @@ oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <tim
 
 ### `oxa l2 diffs`
 
-Get L2 tick-level diffs over a time range. Requires Pro+ tier.
+Get L2 tick-level diffs over a time range.
 
 ```bash
 oxa l2 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -522,7 +522,7 @@ oxa l2 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time>
 
 ### `oxa l3 get`
 
-Get a Lighter L3 order-level orderbook snapshot. Lighter only. Requires Pro+ tier.
+Get a Lighter L3 order-level orderbook snapshot. Lighter only.
 
 ```bash
 oxa l3 get --symbol <symbol> [options]
@@ -557,7 +557,7 @@ oxa hip4 prices 0 --start 2026-04-01T00:00:00Z --end 2026-04-02T00:00:00Z --inte
 oxa hip4 summary 0
 oxa hip4 freshness 0
 
-# Order-level (Build+ / Pro+ tier)
+# Order-level
 oxa hip4 orders history 0 --start ... --end ...
 oxa hip4 orders flow    0 --start ... --end ... --interval 1h
 oxa hip4 orders tpsl    0 --start ... --end ...
@@ -570,7 +570,7 @@ oxa hip4 l4 history  0 --start ... --end ...
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, liquidations, or candles by design (those are perpetual constructs).
 
-Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. Tier gating mirrors HIP-3: Pro+ for L4 and order lifecycle, Build+ for everything else.
+Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. All markets and schemas (including L4 and order lifecycle) are available on every tier.
 
 ```bash
 # Discovery
@@ -582,11 +582,11 @@ oxa spot orderbook HYPE-USDC --depth 10
 oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
 oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z --user 0xabc...
 
-# L4 / order lifecycle (Pro+ tier; live from 2026-05-05)
+# L4 / order lifecycle (live from 2026-05-05)
 oxa spot l4 HYPE-USDC
 oxa spot orders HYPE-USDC --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
 
-# TWAP statuses (Build+ tier; live from 2026-05-05)
+# TWAP statuses (live from 2026-05-05)
 oxa spot twap HYPE-USDC --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
 oxa spot twap-user 0xabc... --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
 
@@ -596,15 +596,15 @@ oxa spot freshness HYPE-USDC
 
 | Subcommand | Description | Tier |
 |---|---|---|
-| `oxa spot pairs` | List every active spot pair (294) | Build+ |
-| `oxa spot pair <symbol>` | Get a single spot pair | Build+ |
-| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Build+ |
-| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Build+ |
-| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | Pro+ |
-| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | Pro+ |
-| `oxa spot twap <symbol>` | TWAP statuses for a single pair | Build+ |
-| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across all pairs | Build+ |
-| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | Build+ |
+| `oxa spot pairs` | List every active spot pair (294) | All |
+| `oxa spot pair <symbol>` | Get a single spot pair | All |
+| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | All |
+| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | All |
+| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | All |
+| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | All |
+| `oxa spot twap <symbol>` | TWAP statuses for a single pair | All |
+| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across all pairs | All |
+| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | All |
 
 For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Example:
 
@@ -614,7 +614,7 @@ oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. Requires Build+ tier (no Free-tier WS access) and Node.js 22+ for the global `WebSocket`.
+Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access is available on every tier, starting with Free (10 subscriptions / 2 connections). Requires Node.js 22+ for the global `WebSocket`.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
@@ -632,7 +632,7 @@ Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with 
 
 ### `oxa l3 history`
 
-Get historical Lighter L3 orderbook snapshots over a time range. Lighter only. Requires Pro+ tier.
+Get historical Lighter L3 orderbook snapshots over a time range. Lighter only.
 
 ```bash
 oxa l3 history --symbol <symbol> --start <time> --end <time> [options]
