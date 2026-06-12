@@ -315,11 +315,11 @@ program
 
 const orders = program
   .command('orders')
-  .description('Order history and flow commands (Build+ / Pro+ tier)');
+  .description('Order history and flow commands');
 
 orders
   .command('history')
-  .description('Get order history with user attribution (Build+ tier)')
+  .description('Get order history with user attribution')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -336,7 +336,7 @@ orders
 
 orders
   .command('flow')
-  .description('Get order flow aggregation (Build+ tier)')
+  .description('Get order flow aggregation')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -350,7 +350,7 @@ orders
 
 orders
   .command('tpsl')
-  .description('Get TP/SL order history (Pro+ tier)')
+  .description('Get TP/SL order history')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -368,11 +368,11 @@ orders
 
 const l4 = program
   .command('l4')
-  .description('L4 order-level orderbook commands (Build+ / Pro+ tier)');
+  .description('L4 order-level orderbook commands');
 
 l4
   .command('get')
-  .description('Get L4 orderbook reconstruction at a timestamp (Pro+ tier)')
+  .description('Get L4 orderbook reconstruction at a timestamp')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
@@ -383,7 +383,7 @@ l4
 
 l4
   .command('diffs')
-  .description('Get L4 orderbook diffs (Pro+ tier)')
+  .description('Get L4 orderbook diffs')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -397,7 +397,7 @@ l4
 
 l4
   .command('history')
-  .description('Get L4 orderbook checkpoints (Pro+ tier)')
+  .description('Get L4 orderbook checkpoints')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -413,11 +413,11 @@ l4
 
 const l2 = program
   .command('l2')
-  .description('L2 full-depth orderbook commands derived from L4 data (Build+ / Pro+ tier)');
+  .description('L2 full-depth orderbook commands derived from L4 data');
 
 l2
   .command('get')
-  .description('Get L2 full-depth orderbook at a timestamp (Build+ tier)')
+  .description('Get L2 full-depth orderbook at a timestamp')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
@@ -428,7 +428,7 @@ l2
 
 l2
   .command('history')
-  .description('Get L2 full-depth orderbook checkpoints (Build+ tier)')
+  .description('Get L2 full-depth orderbook checkpoints')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -443,7 +443,7 @@ l2
 
 l2
   .command('diffs')
-  .description('Get L2 tick-level orderbook diffs (Pro+ tier)')
+  .description('Get L2 tick-level orderbook diffs')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -459,11 +459,11 @@ l2
 
 const l3 = program
   .command('l3')
-  .description('L3 order-level orderbook commands — Lighter only (Pro+ tier)');
+  .description('L3 order-level orderbook commands — Lighter only');
 
 l3
   .command('get')
-  .description('Get Lighter L3 orderbook snapshot (Pro+ tier)')
+  .description('Get Lighter L3 orderbook snapshot')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
   .option('--depth <n>', 'Number of price levels per side')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -472,7 +472,7 @@ l3
 
 l3
   .command('history')
-  .description('Get historical Lighter L3 orderbook snapshots (Pro+ tier)')
+  .description('Get historical Lighter L3 orderbook snapshots')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
@@ -488,7 +488,7 @@ l3
 
 const outcomes = program
   .command('outcomes')
-  .description('HIP-4 outcome markets (binary outcome metadata) — Build+ tier');
+  .description('HIP-4 outcome markets (binary outcome metadata)');
 
 outcomes
   .command('list')
@@ -638,11 +638,11 @@ hip4
 
 const hip4Orders = hip4
   .command('orders')
-  .description('HIP-4 order history / flow / TP-SL (Build+ / Pro+ tier)');
+  .description('HIP-4 order history / flow / TP-SL');
 
 hip4Orders
   .command('history <coin>')
-  .description('Get HIP-4 order history with user attribution (Build+ tier)')
+  .description('Get HIP-4 order history with user attribution')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--user <address>', 'Filter by user wallet address')
@@ -657,7 +657,7 @@ hip4Orders
 
 hip4Orders
   .command('flow <coin>')
-  .description('Get HIP-4 order flow aggregation (Build+ tier)')
+  .description('Get HIP-4 order flow aggregation')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--interval <interval>', 'Aggregation interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d', '1h')
@@ -669,7 +669,7 @@ hip4Orders
 
 hip4Orders
   .command('tpsl <coin>')
-  .description('Get HIP-4 TP/SL order history (Pro+ tier)')
+  .description('Get HIP-4 TP/SL order history')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--user <address>', 'Filter by user wallet address')
@@ -683,11 +683,11 @@ hip4Orders
 
 const hip4L4 = hip4
   .command('l4')
-  .description('HIP-4 L4 order-level commands (Pro+ tier)');
+  .description('HIP-4 L4 order-level commands');
 
 hip4L4
   .command('get <coin>')
-  .description('Get HIP-4 L4 orderbook reconstruction (Pro+ tier)')
+  .description('Get HIP-4 L4 orderbook reconstruction')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
   .option('--depth <n>', 'Number of price levels per side')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -696,7 +696,7 @@ hip4L4
 
 hip4L4
   .command('diffs <coin>')
-  .description('Get HIP-4 L4 orderbook diffs (Pro+ tier)')
+  .description('Get HIP-4 L4 orderbook diffs')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
@@ -708,7 +708,7 @@ hip4L4
 
 hip4L4
   .command('history <coin>')
-  .description('Get HIP-4 L4 orderbook checkpoints (Build+ tier)')
+  .description('Get HIP-4 L4 orderbook checkpoints')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
@@ -724,7 +724,7 @@ hip4L4
 
 const stream = program
   .command('stream')
-  .description('Stream realtime market data over WebSocket (Build+ tier; requires Node 22+)');
+  .description('Stream realtime market data over WebSocket (requires Node 22+)');
 
 stream
   .command('liquidations <symbol>')
@@ -824,7 +824,7 @@ spot
 
 spot
   .command('l4 <symbol>')
-  .description('Get spot L4 orderbook reconstruction (Pro+ tier; live from 2026-05-05)')
+  .description('Get spot L4 orderbook reconstruction (live from 2026-05-05)')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
   .option('--depth <n>', 'Number of price levels per side')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -833,7 +833,7 @@ spot
 
 spot
   .command('orders <symbol>')
-  .description('Get spot order lifecycle history (Pro+ tier; live from 2026-05-05)')
+  .description('Get spot order lifecycle history (live from 2026-05-05)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--user <address>', 'Filter by user wallet address')
@@ -848,7 +848,7 @@ spot
 
 spot
   .command('twap <symbol>')
-  .description('Get spot TWAP statuses for a pair (Build+; live from 2026-05-05)')
+  .description('Get spot TWAP statuses for a pair (live from 2026-05-05)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
@@ -860,7 +860,7 @@ spot
 
 spot
   .command('twap-user <user>')
-  .description('Get spot TWAP statuses for a user wallet across all pairs (Build+)')
+  .description('Get spot TWAP statuses for a user wallet across all pairs')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
