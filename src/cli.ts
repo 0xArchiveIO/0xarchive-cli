@@ -19,6 +19,7 @@ import {
   hip4OrderbookGet,
   hip4OrderbookHistory,
   hip4Trades,
+  hip4Candles,
   hip4Instruments,
   hip4OiCurrent,
   hip4OiHistory,
@@ -43,6 +44,7 @@ import {
 import {
   spotPairsList,
   spotPairGet,
+  spotCandles,
   spotOrderbookGet,
   spotTrades,
   spotL4Get,
@@ -53,7 +55,7 @@ import {
 } from './commands/spot.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, lighter, hip3, or hip4. ' +
@@ -143,7 +145,7 @@ trades
 
 program
   .command('candles')
-  .description('Get OHLCV candle data')
+  .description('Get OHLCV candle data (Hyperliquid, Lighter, HIP-3, or HIP-4)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -160,7 +162,7 @@ program
 
 const funding = program
   .command('funding')
-  .description('Funding rate data');
+  .description('Funding rate data (core Hyperliquid ~1m; Lighter/HIP-3 ~10s; unavailable on HIP-4)');
 
 funding
   .command('current')
@@ -189,7 +191,7 @@ funding
 
 const oi = program
   .command('oi')
-  .description('Open interest data');
+  .description('Open interest data (HIP-4 ~10s from 2026-05-02; Lighter ~10s)');
 
 oi
   .command('current')
@@ -413,11 +415,11 @@ l4
 
 const l2 = program
   .command('l2')
-  .description('L2 full-depth orderbook commands derived from L4 data');
+  .description('L2 all-level orderbook commands derived from L4 data');
 
 l2
   .command('get')
-  .description('Get L2 full-depth orderbook at a timestamp')
+  .description('Get an L2 all-level orderbook at a timestamp')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
@@ -428,7 +430,7 @@ l2
 
 l2
   .command('history')
-  .description('Get L2 full-depth orderbook checkpoints')
+  .description('Get L2 all-level orderbook checkpoints')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -459,13 +461,13 @@ l2
 
 const l3 = program
   .command('l3')
-  .description('L3 order-level orderbook commands — Lighter only');
+  .description('Lighter L3 order-level orderbook commands — max 250 orders per side');
 
 l3
   .command('get')
   .description('Get Lighter L3 orderbook snapshot')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
-  .option('--depth <n>', 'Number of price levels per side')
+  .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(l3GetCommand);
@@ -476,7 +478,7 @@ l3
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--depth <n>', 'Number of price levels per side')
+  .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -511,8 +513,8 @@ outcomes
 
 // ── oxa hip4 ────────────────────────────────────────────────────────────
 // Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`).
-// HIP-4 has no funding/liquidations/candles by design, so those verbs are
-// intentionally absent.
+// HIP-4 has no funding or liquidations by design; candles and per-side OI are
+// available through their dedicated routes.
 
 const hip4 = program
   .command('hip4')
@@ -587,9 +589,22 @@ hip4
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(hip4Trades);
 
+hip4
+  .command('candles <coin>')
+  .description('Get HIP-4 OHLCV candles')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Candle interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w', '1h')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4Candles);
+
 const hip4Oi = hip4
   .command('oi')
-  .description('HIP-4 open interest commands (per-side; mark_price is implied probability 0..1)');
+  .description('HIP-4 open interest commands (per-side, ~10s from 2026-05-02; mark_price is probability 0..1)');
 
 hip4Oi
   .command('current <coin>')
@@ -776,19 +791,32 @@ stream
 
 // ── oxa spot ────────────────────────────────────────────────────────────
 // Hyperliquid Spot. Symbols are dashed canonical (HYPE-USDC, PURR-USDC).
-// No funding, OI, liquidations, or candles by design (perp-only constructs).
-// Coverage: trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05.
+// No funding, OI, or liquidations. Spot candles are served from
+// 2025-03-22T10:50:22Z; orderbook, L4, and TWAP are live from 2026-05-05.
 
 const spot = program
   .command('spot')
   .description(
     'Hyperliquid Spot market data. Symbols are dashed canonical (HYPE-USDC, PURR-USDC). ' +
-      'No funding, OI, liquidations, or candles by design.',
+      'No funding, OI, or liquidations. Candles are available from 2025-03-22.',
   );
 
 spot
+  .command('candles <symbol>')
+  .description('Fetch Spot OHLCV candles (from 2025-03-22; max 1000 records)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Candle interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w', '1h')
+  .option('--limit <n>', 'Maximum records to return (max 1000)')
+  .option('--cursor <cursor>', 'Opaque pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotCandles);
+
+spot
   .command('pairs')
-  .description('List every active spot pair (294 pairs)')
+  .description('List every active spot pair (326 pairs)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotPairsList);

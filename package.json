@@ -1,7 +1,7 @@
 {
   "name": "@0xarchive/cli",
-  "version": "1.7.0",
-  "description": "Terminal-first 0xArchive client for Hyperliquid and Lighter.xyz market data, including Hyperliquid HIP-3, HIP-4, and Spot",
+  "version": "1.8.0",
+  "description": "Terminal-first 0xArchive client for Hyperliquid and Lighter market data, including Hyperliquid HIP-3, HIP-4, and Spot",
   "type": "module",
   "bin": {
     "oxa": "./dist/cli.js"
