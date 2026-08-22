@@ -74,7 +74,7 @@ oxa stream liquidations BTC
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
-| Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 294 pairs. Trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, liquidations, or candles. |
+| Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, liquidations, or candles. |
 
 ## Commands
 
@@ -581,7 +581,7 @@ oxa hip4 l4 history  0 --start ... --end ...
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, liquidations, or candles by design (those are perpetual constructs).
 
-Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
+Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 326 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
 
 ```bash
 # Discovery
@@ -607,7 +607,7 @@ oxa spot freshness HYPE-USDC
 
 | Subcommand | Description | Plan |
 |---|---|---|
-| `oxa spot pairs` | List active spot pairs (294) | Check plan |
+| `oxa spot pairs` | List active spot pairs (326) | Check plan |
 | `oxa spot pair <symbol>` | Get a single spot pair | Check plan |
 | `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Check plan |
 | `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Check plan |

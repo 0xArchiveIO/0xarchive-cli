@@ -173,4 +173,21 @@ describe('HIP-4 candle coverage', () => {
       expect.stringContaining('Use --exchange hyperliquid or hip3.'),
     );
   });
+
+  it('keeps the liquidation command guidance on accepted exchange names', () => {
+    const source = readFileSync(
+      new URL('../src/commands/liquidations.ts', import.meta.url),
+      'utf8',
+    );
+    expect(source).toContain('Use --exchange hyperliquid or hip3.');
+    expect(source).not.toContain('Use --exchange hl or hip3.');
+  });
+
+  it('keeps the authenticated Spot inventory coherent across user-facing copy', () => {
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+    const cliSource = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
+    expect(readme).toContain('326 pairs');
+    expect(cliSource).toContain('326 pairs');
+    expect(`${readme}\n${cliSource}`).not.toContain('294 pairs');
+  });
 });

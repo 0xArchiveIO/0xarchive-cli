@@ -17,7 +17,7 @@
 
 ### Added
 
-- **Hyperliquid Spot support** (`oxa spot ...`). 294 spot pairs covered. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves dashed to wire format internally.
+- **Hyperliquid Spot support** (`oxa spot ...`). 326 spot pairs covered. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves dashed to wire format internally.
   - `oxa spot pairs` lists every active spot pair.
   - `oxa spot pair <symbol>` returns one pair.
   - `oxa spot orderbook <symbol>` returns the current L2 spot orderbook (live from 2026-05-05).

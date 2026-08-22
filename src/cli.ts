@@ -802,7 +802,7 @@ const spot = program
 
 spot
   .command('pairs')
-  .description('List every active spot pair (294 pairs)')
+  .description('List every active spot pair (326 pairs)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotPairsList);
