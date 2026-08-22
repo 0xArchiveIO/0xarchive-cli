@@ -38,6 +38,10 @@ oxa trades fetch --exchange lighter --symbol BTC --limit 50
 oxa candles --exchange hip3 --symbol km:US500 \
   --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
 
+# Fetch HIP-4 outcome-market candles (coin 0 = outcome 0 / side 0)
+oxa candles --exchange hip4 --symbol 0 \
+  --start 2026-05-02T00:00:00Z --end 2026-05-03T00:00:00Z --interval 1h
+
 # List active HIP-4 outcome markets, then inspect one
 oxa hip4 outcomes list --settled false
 oxa hip4 outcomes get 0
@@ -69,7 +73,7 @@ oxa stream liquidations BTC
 | Hyperliquid | `--exchange hyperliquid` | `BTC`, `ETH`, `SOL`, etc. |
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
-| Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. No funding, liquidations, or candles. |
+| Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
 | Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 294 pairs. Trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, liquidations, or candles. |
 
 ## Commands
@@ -166,6 +170,8 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
+HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot does not expose candles.
+
 ### `oxa funding current`
 
 Get the current funding rate.
@@ -173,6 +179,8 @@ Get the current funding rate.
 ```bash
 oxa funding current --exchange <exchange> --symbol <symbol> [--format <format>]
 ```
+
+Cadence guidance: core Hyperliquid funding is approximately 1 minute; Lighter and HIP-3 funding are approximately 10 seconds. HIP-4 has no funding endpoint.
 
 ### `oxa funding history`
 
@@ -200,6 +208,8 @@ Get current open interest.
 ```bash
 oxa oi current --exchange <exchange> --symbol <symbol> [--format <format>]
 ```
+
+HIP-4 per-side open interest is available from 2026-05-02 at approximately 10-second cadence. Lighter open interest is also approximately 10 seconds; cadence is data-type specific rather than a generic venue-wide promise.
 
 ### `oxa oi history`
 
@@ -288,7 +298,7 @@ oxa liquidations user --exchange hyperliquid --user <address> --start <time> --e
 
 ### `oxa summary`
 
-Get a combined market summary in one call: mark price, oracle price, funding rate, open interest, 24h volume, and liquidation volumes.
+Get a combined market summary in one call: mark price, oracle price, open interest, 24h volume, and any available funding or liquidation fields.
 
 ```bash
 oxa summary --exchange <exchange> --symbol <symbol> [--format <format>]
@@ -467,7 +477,7 @@ oxa l4 history --exchange <exchange> --symbol <symbol> --start <time> --end <tim
 
 ### `oxa l2 get`
 
-Get an L2 full-depth orderbook snapshot derived from L4 data.
+Get an L2 all-level orderbook snapshot derived from L4 data on supported Hyperliquid routes.
 
 ```bash
 oxa l2 get --exchange <exchange> --symbol <symbol> [options]
@@ -483,7 +493,7 @@ oxa l2 get --exchange <exchange> --symbol <symbol> [options]
 
 ### `oxa l2 history`
 
-Get L2 full-depth orderbook history over a time range.
+Get L2 all-level orderbook history over a time range on supported Hyperliquid routes.
 
 ```bash
 oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -522,7 +532,7 @@ oxa l2 diffs --exchange <exchange> --symbol <symbol> --start <time> --end <time>
 
 ### `oxa l3 get`
 
-Get a Lighter L3 order-level orderbook snapshot. Lighter only.
+Get a Lighter L3 order-level orderbook snapshot (maximum 250 orders per side). Lighter only.
 
 ```bash
 oxa l3 get --symbol <symbol> [options]
@@ -531,14 +541,14 @@ oxa l3 get --symbol <symbol> [options]
 | Option | Required | Description |
 |--------|----------|-------------|
 | `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
-| `--depth` | No | Number of price levels per side |
+| `--depth` | No | Maximum orders per side (Lighter cap: 250) |
 | `--format` | No | `json` (default) or `pretty` |
 
 **Note:** L3 commands are Lighter-only and do not accept an `--exchange` flag.
 
 ### `oxa hip4 ...` (HIP-4 outcome markets)
 
-Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`, `42`). HIP-4 has no funding, liquidations, or candles by design. Equivalent to `--exchange hip4` on the shared verbs, but reads more naturally for outcome-market workflows.
+Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`, `42`). HIP-4 candles are available; per-side OI is available from 2026-05-02 at approximately 10-second cadence. HIP-4 has no funding or liquidations. Equivalent to `--exchange hip4` on the shared verbs, but reads more naturally for outcome-market workflows.
 
 ```bash
 # Discovery
@@ -548,12 +558,13 @@ oxa hip4 outcomes get 0
 
 # Market data
 oxa hip4 orderbook get 0 --depth 10
-oxa hip4 orderbook history 0 --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
+oxa hip4 orderbook history 0 --start 2026-05-02T00:00:00Z --end 2026-05-02T01:00:00Z
 oxa hip4 trades 0 --recent --limit 50
-oxa hip4 trades 0 --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
+oxa hip4 trades 0 --start 2026-05-02T00:00:00Z --end 2026-05-02T01:00:00Z
+oxa hip4 candles 0 --start 2026-05-02T00:00:00Z --end 2026-05-03T00:00:00Z --interval 1h
 oxa hip4 oi current 0
-oxa hip4 oi history 0 --start 2026-04-01T00:00:00Z --end 2026-04-02T00:00:00Z --interval 1h
-oxa hip4 prices 0 --start 2026-04-01T00:00:00Z --end 2026-04-02T00:00:00Z --interval 1h
+oxa hip4 oi history 0 --start 2026-05-02T00:00:00Z --end 2026-05-03T00:00:00Z --interval 1h
+oxa hip4 prices 0 --start 2026-05-02T00:00:00Z --end 2026-05-03T00:00:00Z --interval 1h
 oxa hip4 summary 0
 oxa hip4 freshness 0
 
@@ -570,7 +581,7 @@ oxa hip4 l4 history  0 --start ... --end ...
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, liquidations, or candles by design (those are perpetual constructs).
 
-Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. All markets and schemas (including L4 and order lifecycle) are available on every tier.
+Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 294 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
 
 ```bash
 # Discovery
@@ -594,17 +605,17 @@ oxa spot twap-user 0xabc... --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:
 oxa spot freshness HYPE-USDC
 ```
 
-| Subcommand | Description | Tier |
+| Subcommand | Description | Plan |
 |---|---|---|
-| `oxa spot pairs` | List every active spot pair (294) | All |
-| `oxa spot pair <symbol>` | Get a single spot pair | All |
-| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | All |
-| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | All |
-| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | All |
-| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | All |
-| `oxa spot twap <symbol>` | TWAP statuses for a single pair | All |
-| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across all pairs | All |
-| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | All |
+| `oxa spot pairs` | List active spot pairs (294) | Check plan |
+| `oxa spot pair <symbol>` | Get a single spot pair | Check plan |
+| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Check plan |
+| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Check plan |
+| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | Check plan |
+| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | Check plan |
+| `oxa spot twap <symbol>` | TWAP statuses for a single pair | Check plan |
+| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs | Check plan |
+| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | Check plan |
 
 For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Example:
 
@@ -614,7 +625,7 @@ oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access is available on every tier, starting with Free (10 subscriptions / 2 connections). Requires Node.js 22+ for the global `WebSocket`.
+Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access, subscription caps, and replay limits are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
@@ -752,7 +763,7 @@ oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00
 
 ## Data Catalog
 
-For large-scale data exports (full order books, complete trade history, etc.), use the [Data Catalog](https://www.0xarchive.io/data). It lets you choose markets, datasets, and date ranges, see a live quote, and export zstd-compressed Parquet. The CLI is best for point queries and moderate datasets; the Data Catalog is the file-export path.
+For large-scale data exports (route-specific order books, fill-level trade history, and other retained datasets), use the [Data Catalog](https://www.0xarchive.io/data). It lets you choose markets, datasets, and date ranges, see a live quote, and export zstd-compressed Parquet. The CLI is best for point queries and moderate datasets; the Data Catalog is the file-export path.
 
 ## Links
 

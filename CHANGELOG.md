@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.0 - 2026-08-22
+
+### Added
+
+- HIP-4 candle history via `oxa hip4 candles`, served from 2026-05-02. OHLC values represent implied probabilities.
+
+### Changed
+
+- Coverage guidance now distinguishes route-specific history, raw cadence, and depth.
+- Lighter L3 is documented as an order-level feed capped at 250 orders per side from 2026-03-05.
+- Lighter trade history is documented as per-fill maker/taker context from 2025-08-27, with market-specific starts.
+- Hosted MCP guidance uses OAuth and does not ask for an API key.
+
 ## 1.7.0
 
 ### Added
