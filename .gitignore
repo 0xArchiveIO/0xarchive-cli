@@ -1,6 +1,5 @@
 node_modules/
 dist/
-tests/
 package-lock.json
 *.tsbuildinfo
 .DS_Store

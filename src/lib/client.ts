@@ -29,15 +29,15 @@ export function validateExchange(exchange: string): Exchange {
   return exchange as Exchange;
 }
 
-// HIP-4 has no funding/liquidations/candles by design (binary outcome markets).
-// Reject early with a clear message before any network call.
+// HIP-4 has no funding or liquidation endpoints (binary outcome markets).
+// Reject unsupported requests early with a clear message before any network call.
 export function rejectHip4(
   exchange: Exchange,
   feature: string,
 ): asserts exchange is Exclude<Exchange, 'hip4'> {
   if (exchange === 'hip4') {
     exitError(
-      `HIP-4 has no ${feature} endpoint. Use --exchange hl or hip3.`,
+      `HIP-4 has no ${feature} endpoint. Use --exchange hyperliquid or hip3.`,
       EXIT.VALIDATION,
     );
   }

@@ -1,10 +1,24 @@
 # Changelog
 
+## 1.8.0 - 2026-08-22
+
+### Added
+
+- HIP-4 candle history via `oxa hip4 candles`, served from 2026-05-02. OHLC values represent implied probabilities.
+- Hyperliquid Spot candle history via `oxa spot candles <symbol>`, served from 2025-03-22T10:50:22Z at `1m` through `1w` intervals with a maximum page size of 1000 and opaque cursors.
+
+### Changed
+
+- Coverage guidance now distinguishes route-specific history, raw cadence, and depth.
+- Lighter L3 is documented as an order-level feed capped at 250 orders per side from 2026-03-05.
+- Lighter trade history is documented as per-fill maker/taker context from 2025-08-27, with market-specific starts.
+- Hosted MCP guidance uses OAuth and does not ask for an API key.
+
 ## 1.7.0
 
 ### Added
 
-- **Hyperliquid Spot support** (`oxa spot ...`). 294 spot pairs covered. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves dashed to wire format internally.
+- **Hyperliquid Spot support** (`oxa spot ...`). 326 spot pairs covered. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves dashed to wire format internally.
   - `oxa spot pairs` lists every active spot pair.
   - `oxa spot pair <symbol>` returns one pair.
   - `oxa spot orderbook <symbol>` returns the current L2 spot orderbook (live from 2026-05-05).
@@ -19,7 +33,7 @@
 
 ### Constraints
 
-- Spot has no funding, open interest, liquidations, or candles by design (perpetual constructs).
+- Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route.
 - Spot trades are backfilled from Hyperliquid S3 to 2025-03-22 (the earliest published date). Pre-March 2025 spot history is unrecoverable from any free public archive.
 - Spot orderbook, L4, and TWAP are live-only because Hyperliquid does not publish historical orderbook data.
 

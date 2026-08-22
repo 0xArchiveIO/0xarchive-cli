@@ -4,11 +4,12 @@
 // means outcome 0 / side 0). The legacy `#0` / `%230` forms still work because
 // `encodeHip4Coin` normalizes them.
 //
-// HIP-4 has no funding/liquidations/candles by design, so those verbs are
-// intentionally absent from this group.
+// HIP-4 has no funding or liquidations by design. Candles and per-side OI are
+// available through their dedicated routes.
 
 import { orderbookGetCommand, orderbookHistoryCommand } from './orderbook.js';
 import { tradesFetchCommand } from './trades.js';
+import { candlesCommand } from './candles.js';
 import { instrumentsCommand } from './instruments.js';
 import { oiCurrentCommand, oiHistoryCommand } from './openinterest.js';
 import { summaryCommand } from './summary.js';
@@ -63,6 +64,22 @@ export async function hip4Trades(
   // through to the recent-trades path on HIP-4.
   const { recent: _recent, ...rest } = options;
   return tradesFetchCommand({ ...rest, exchange: 'hip4', symbol: coin });
+}
+
+// ── candles ────────────────────────────────────────────────────────────────
+
+export async function hip4Candles(
+  coin: string,
+  options: BaseFormatOpts & {
+    start: string;
+    end: string;
+    interval?: string;
+    limit?: string;
+    cursor?: string;
+    out?: string;
+  },
+): Promise<void> {
+  return candlesCommand({ ...options, exchange: 'hip4', symbol: coin });
 }
 
 // ── instruments ────────────────────────────────────────────────────────────

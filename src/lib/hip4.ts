@@ -200,6 +200,25 @@ export class Hip4Client {
     },
   };
 
+  // ── Candles ───────────────────────────────────────────────────────────
+  candles = {
+    history: async (
+      symbol: string,
+      params: {
+        start: number;
+        end: number;
+        limit?: number;
+        cursor?: string;
+        interval?: string;
+      },
+    ): Promise<CursorResponse<any[]>> => {
+      return this.cursorRequest<any[]>(
+        `${HIP4_BASE_PATH}/candles/${encodeHip4Coin(symbol)}`,
+        params as Record<string, unknown>,
+      );
+    },
+  };
+
   // ── Open interest ─────────────────────────────────────────────────────
   openInterest = {
     current: async (symbol: string): Promise<any> => {

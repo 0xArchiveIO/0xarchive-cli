@@ -2,8 +2,8 @@
 // `client.spot.*` SDK resource. Symbols are dashed canonical (HYPE-USDC,
 // PURR-USDC); the server resolves dashed to wire format internally.
 //
-// Spot has no funding, open interest, liquidations, or candles by design
-// (those are perpetual constructs). The CLI intentionally omits those verbs.
+// Spot has no funding, open interest, or liquidations. Historical OHLCV
+// candles are served from 2025-03-22T10:50:22Z at the dedicated Spot route.
 //
 // Coverage: trades from 2025-03-22 (S3 backfill); orderbook, L4, TWAP live
 // from 2026-05-05.
@@ -23,8 +23,14 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, parsePositiveInt } from '../lib/time.js';
+import {
+  parseTimestamp,
+  parseLimit,
+  parsePositiveInt,
+  validateCandleInterval,
+} from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
+import { SpotCandlesClient } from '../lib/spot-candles.js';
 
 interface BaseFormatOpts {
   apiKey?: string;
@@ -93,6 +99,110 @@ export async function spotPairGet(symbol: string, options: BaseFormatOpts): Prom
       process.stdout.write('\n');
     } else {
       outputJson(pair);
+    }
+
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+// ── oxa spot candles <symbol> ─────────────────────────────────────────────
+
+export async function spotCandles(
+  symbol: string,
+  options: BaseFormatOpts & {
+    start?: string;
+    end?: string;
+    interval?: string;
+    limit?: string;
+    cursor?: string;
+    out?: string;
+  },
+): Promise<void> {
+  const format = validateFormat(options.format);
+  const apiKey = resolveApiKey(options.apiKey);
+  const limit = parseLimit(options.limit);
+  const interval = validateCandleInterval(options.interval);
+
+  if (limit !== undefined && limit > 1000) {
+    exitError('Spot candle --limit cannot exceed 1000', EXIT.VALIDATION);
+  }
+
+  if (!options.start || !options.end) {
+    exitError(
+      'Spot candles require --start and --end.\n' +
+        'Example: oxa spot candles HYPE-USDC ' +
+        '--start 2025-03-22T10:50:22Z --end 2025-03-22T11:50:22Z --interval 1h',
+      EXIT.VALIDATION,
+    );
+  }
+
+  const start = parseTimestamp(options.start, 'start');
+  const end = parseTimestamp(options.end, 'end');
+
+  if (start >= end) {
+    exitError('--start must be before --end', EXIT.VALIDATION);
+  }
+
+  const client = new SpotCandlesClient(apiKey);
+
+  try {
+    const result = await client.history(symbol, {
+      start,
+      end,
+      interval,
+      limit,
+      cursor: options.cursor,
+    });
+    const candles = result.data;
+    const envelope = { data: candles, nextCursor: result.nextCursor ?? null };
+
+    if (options.out) {
+      writeOutputFile(options.out, envelope);
+      const summary = {
+        written_to: options.out,
+        records: candles.length,
+        exchange: 'spot',
+        symbol,
+        interval: interval ?? '1h',
+        has_more: !!result.nextCursor,
+        nextCursor: result.nextCursor ?? null,
+      };
+      if (format === 'pretty') {
+        prettyHeader(`${symbol} Candles (spot)`);
+        prettyField('Records', candles.length);
+        prettyField('Interval', interval ?? '1h');
+        prettyField('Written to', options.out);
+        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        process.stdout.write('\n');
+      } else {
+        outputJson(summary);
+      }
+    } else if (format === 'pretty') {
+      prettyHeader(`${symbol} Candles (spot) — ${candles.length} records`);
+      prettyField('Interval', interval ?? '1h');
+
+      if (candles.length === 0) {
+        prettyDim('No candles found.');
+      } else {
+        const preview = candles.slice(0, 20);
+        const rows = preview.map((c: any) => [
+          c.timestamp,
+          c.open,
+          c.high,
+          c.low,
+          c.close,
+          c.volume,
+        ]);
+        prettyTable(['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'], rows);
+
+        if (candles.length > 20) prettyDim(`... and ${candles.length - 20} more`);
+        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+      }
+      process.stdout.write('\n');
+    } else {
+      outputJson(envelope);
     }
 
     process.exit(EXIT.SUCCESS);
