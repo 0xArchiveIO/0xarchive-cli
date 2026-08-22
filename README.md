@@ -74,7 +74,7 @@ oxa stream liquidations BTC
 | Lighter.xyz | `--exchange lighter` | `BTC`, `ETH`, etc. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
-| Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, liquidations, or candles. |
+| Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Spot candles from 2025-03-22T10:50:22Z at `1m`/`5m`/`15m`/`30m`/`1h`/`4h`/`1d`/`1w`, max 1000 rows; trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, or liquidations. |
 
 ## Commands
 
@@ -170,7 +170,7 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
-HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot does not expose candles.
+HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route.
 
 ### `oxa funding current`
 
@@ -579,9 +579,9 @@ oxa hip4 l4 history  0 --start ... --end ...
 
 ### `oxa spot ...` (Hyperliquid Spot)
 
-Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, liquidations, or candles by design (those are perpetual constructs).
+Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route.
 
-Coverage: trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 326 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
+Coverage: Spot candles from 2025-03-22T10:50:22Z, with `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, and `1w` intervals and a maximum limit of 1000; trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 326 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
 
 ```bash
 # Discovery
@@ -592,6 +592,7 @@ oxa spot pair HYPE-USDC
 oxa spot orderbook HYPE-USDC --depth 10
 oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
 oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z --user 0xabc...
+oxa spot candles HYPE-USDC --start 2025-03-22T10:50:22Z --end 2025-03-22T11:50:22Z --interval 1m --limit 1000
 
 # L4 / order lifecycle (live from 2026-05-05)
 oxa spot l4 HYPE-USDC
@@ -609,6 +610,7 @@ oxa spot freshness HYPE-USDC
 |---|---|---|
 | `oxa spot pairs` | List active spot pairs (326) | Check plan |
 | `oxa spot pair <symbol>` | Get a single spot pair | Check plan |
+| `oxa spot candles <symbol>` | Spot OHLCV candles from 2025-03-22T10:50:22Z; intervals `1m` through `1w`, max 1000 rows | Check plan |
 | `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Check plan |
 | `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Check plan |
 | `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | Check plan |

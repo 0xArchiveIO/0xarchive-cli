@@ -5,6 +5,7 @@
 ### Added
 
 - HIP-4 candle history via `oxa hip4 candles`, served from 2026-05-02. OHLC values represent implied probabilities.
+- Hyperliquid Spot candle history via `oxa spot candles <symbol>`, served from 2025-03-22T10:50:22Z at `1m` through `1w` intervals with a maximum page size of 1000 and opaque cursors.
 
 ### Changed
 
@@ -32,7 +33,7 @@
 
 ### Constraints
 
-- Spot has no funding, open interest, liquidations, or candles by design (perpetual constructs).
+- Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route.
 - Spot trades are backfilled from Hyperliquid S3 to 2025-03-22 (the earliest published date). Pre-March 2025 spot history is unrecoverable from any free public archive.
 - Spot orderbook, L4, and TWAP are live-only because Hyperliquid does not publish historical orderbook data.
 

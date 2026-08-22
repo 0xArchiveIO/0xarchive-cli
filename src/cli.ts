@@ -44,6 +44,7 @@ import {
 import {
   spotPairsList,
   spotPairGet,
+  spotCandles,
   spotOrderbookGet,
   spotTrades,
   spotL4Get,
@@ -790,15 +791,28 @@ stream
 
 // ── oxa spot ────────────────────────────────────────────────────────────
 // Hyperliquid Spot. Symbols are dashed canonical (HYPE-USDC, PURR-USDC).
-// No funding, OI, liquidations, or candles by design (perp-only constructs).
-// Coverage: trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05.
+// No funding, OI, or liquidations. Spot candles are served from
+// 2025-03-22T10:50:22Z; orderbook, L4, and TWAP are live from 2026-05-05.
 
 const spot = program
   .command('spot')
   .description(
     'Hyperliquid Spot market data. Symbols are dashed canonical (HYPE-USDC, PURR-USDC). ' +
-      'No funding, OI, liquidations, or candles by design.',
+      'No funding, OI, or liquidations. Candles are available from 2025-03-22.',
   );
+
+spot
+  .command('candles <symbol>')
+  .description('Fetch Spot OHLCV candles (from 2025-03-22; max 1000 records)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--interval <interval>', 'Candle interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w', '1h')
+  .option('--limit <n>', 'Maximum records to return (max 1000)')
+  .option('--cursor <cursor>', 'Opaque pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotCandles);
 
 spot
   .command('pairs')
