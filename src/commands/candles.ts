@@ -38,6 +38,14 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
   const limit = parseLimit(options.limit);
   const interval = validateCandleInterval(options.interval);
 
+  const maxLimit = exchange === 'hip4' ? 1_000 : 10_000;
+  if (limit !== undefined && limit > maxLimit) {
+    exitError(
+      `--limit must be between 1 and ${maxLimit} for ${exchange} candles`,
+      EXIT.VALIDATION,
+    );
+  }
+
   // Candles always require a time range
   if (!options.start || !options.end) {
     exitError(

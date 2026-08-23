@@ -165,12 +165,12 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
 | `--interval` | No | `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d`, `1w` |
-| `--limit` | No | Maximum records to return |
-| `--cursor` | No | Pagination cursor |
+| `--limit` | No | Maximum rows: 10,000 for Hyperliquid, HIP-3, and Lighter; 1,000 for HIP-4 |
+| `--cursor` | No | Pass `nextCursor` from the previous page unchanged |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
-HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route.
+HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals and a maximum of 1,000 rows per request. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route, also capped at 1,000 rows. Candle cursors are returned as strings; pass them back unchanged rather than parsing their current numeric value.
 
 ### `oxa funding current`
 
