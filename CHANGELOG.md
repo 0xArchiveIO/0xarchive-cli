@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.1 - Unreleased
+
+### Changed
+
+- Lighter WebSocket channel names are no longer accepted as live stream
+  targets. The CLI now fails locally with guidance to Lighter REST for current
+  data or SDK WebSocket replay for stored history.
+
 ## 1.8.0 - 2026-08-22
 
 ### Added

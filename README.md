@@ -4,6 +4,8 @@ Terminal-first access to 0xArchive market data.
 
 0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets.
 
+> Lighter channels support historical replay but not live subscriptions through the 0xArchive WebSocket. Use the Lighter REST commands for current data and the historical REST commands (or an SDK WebSocket replay) for stored history.
+
 Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
 
 ## Install
@@ -625,9 +627,11 @@ For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with on
 oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
 ```
 
-### `oxa stream ...` (realtime WebSocket)
+### `oxa stream ...` (live WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access, subscription caps, and replay limits are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
+Stream supported live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access and subscription caps are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
+
+Lighter channel names (`lighter_orderbook`, `lighter_trades`, `lighter_candles`, `lighter_open_interest`, `lighter_funding`, and `lighter_l3_orderbook`) are replay-only and are rejected locally with guidance to the Lighter REST commands. The CLI does not open a live socket for those names; use an SDK WebSocket replay for stored history.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
