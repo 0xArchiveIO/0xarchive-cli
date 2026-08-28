@@ -18,6 +18,19 @@ import {
 
 const DEFAULT_WS_URL = 'wss://api.0xarchive.io/ws';
 
+export const LIGHTER_REPLAY_CHANNELS: ReadonlySet<string> = new Set([
+  'lighter_orderbook',
+  'lighter_trades',
+  'lighter_candles',
+  'lighter_open_interest',
+  'lighter_funding',
+  'lighter_l3_orderbook',
+]);
+
+export const LIGHTER_SUBSCRIPTION_ERROR =
+  'Lighter WebSocket channels support replay, not live subscriptions. ' +
+  'Use REST for current data or a replay request for stored history.';
+
 interface StreamOptions {
   exchange?: string;
   apiKey?: string;
@@ -27,9 +40,9 @@ interface StreamOptions {
 }
 
 // Allow-listed channels for the dedicated `oxa stream <verb>` commands.
-// The `oxa stream subscribe <channel>` form bypasses this list and forwards
-// any channel name to the server (used for spot_orderbook, spot_trades,
-// spot_l4_diffs, spot_l4_orders, spot_twap and any future channels).
+// The `oxa stream subscribe <channel>` form forwards allow-listed channel names
+// (used for spot_* and any future live channels); replay-only Lighter channels
+// are rejected before a WebSocket is opened.
 type Channel =
   | 'liquidations'
   | 'hip3_liquidations'
@@ -55,12 +68,6 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'l4_orders',
   'hip3_l4_diffs',
   'hip3_l4_orders',
-  'lighter_orderbook',
-  'lighter_trades',
-  'lighter_candles',
-  'lighter_open_interest',
-  'lighter_funding',
-  'lighter_l3_orderbook',
   'hip3_orderbook',
   'hip3_trades',
   'hip3_candles',
@@ -222,6 +229,9 @@ export async function streamGenericCommand(
   options: StreamOptions,
 ): Promise<void> {
   const ch = String(channel).toLowerCase();
+  if (LIGHTER_REPLAY_CHANNELS.has(ch)) {
+    exitError(LIGHTER_SUBSCRIPTION_ERROR, EXIT.VALIDATION);
+  }
   if (!VALID_GENERIC_CHANNELS.has(ch)) {
     exitError(
       `Unknown stream channel "${channel}". Valid channels: ${Array.from(VALID_GENERIC_CHANNELS).sort().join(', ')}.`,
