@@ -40,6 +40,13 @@ oxa trades fetch --exchange lighter --symbol BTC --limit 50
 oxa candles --exchange hip3 --symbol km:US500 \
   --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
 
+# Read current HIP-3 breadth above the UTC-session VWAP
+oxa breadth current --exchange hip3
+
+# Read HIP-3 breadth history (history begins on 2026-08-28)
+oxa breadth history --exchange hip3 --start 2026-08-28T00:00:00Z \
+  --end 2026-08-29T00:00:00Z --interval 5m
+
 # Fetch HIP-4 outcome-market candles (coin 0 = outcome 0 / side 0)
 oxa candles --exchange hip4 --symbol 0 \
   --start 2026-05-02T00:00:00Z --end 2026-05-03T00:00:00Z --interval 1h
@@ -173,6 +180,28 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 | `--format` | No | `json` (default) or `pretty` |
 
 HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals and a maximum of 1,000 rows per request. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route, also capped at 1,000 rows. Candle cursors are returned as strings; pass them back unchanged rather than parsing their current numeric value.
+
+### `oxa breadth current` and `oxa breadth history`
+
+Get the current or historical HIP-3 breadth above the current UTC-session VWAP. The session resets at 00:00 UTC and compares the close of the most recently completed 1-minute candle. Instruments without session volume or with a price older than five minutes are excluded. `valuePct` is `null` when no instrument is eligible, never zero. History begins on 2026-08-28, with no synthetic pre-launch history. Historical intervals use the last snapshot in each bucket rather than averaging percentages.
+
+```bash
+oxa breadth current --exchange hip3
+oxa breadth history --exchange hip3 \
+  --start 2026-08-28T00:00:00Z --end 2026-08-29T00:00:00Z \
+  --interval 5m --limit 100
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Must be `hip3` |
+| `--start` | No | Start time (ISO 8601 or Unix ms) |
+| `--end` | No | End time (ISO 8601 or Unix ms) |
+| `--interval` | No | `5m`, `15m`, `30m`, `1h`, `4h`, or `1d` |
+| `--limit` | No | Maximum 1,000 snapshots |
+| `--cursor` | No | Pagination cursor from the previous response |
+| `--out` | No | Write JSON output to a file |
+| `--format` | No | `json` (default) or `pretty` |
 
 ### `oxa funding current`
 
