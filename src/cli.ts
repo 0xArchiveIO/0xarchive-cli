@@ -4,6 +4,7 @@ import { orderbookGetCommand, orderbookHistoryCommand } from './commands/orderbo
 import { tradesFetchCommand } from './commands/trades.js';
 import { freshnessCommand } from './commands/freshness.js';
 import { candlesCommand } from './commands/candles.js';
+import { breadthCurrentCommand, breadthHistoryCommand } from './commands/breadth.js';
 import { fundingCurrentCommand, fundingHistoryCommand } from './commands/funding.js';
 import { oiCurrentCommand, oiHistoryCommand } from './commands/openinterest.js';
 import { instrumentsCommand } from './commands/instruments.js';
@@ -55,7 +56,7 @@ import {
 } from './commands/spot.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, lighter, hip3, or hip4. ' +
@@ -157,6 +158,34 @@ program
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(candlesCommand);
+
+// ── oxa breadth current / history ────────────────────────────────────────
+
+const breadth = program
+  .command('breadth')
+  .description('HIP-3 breadth above the current UTC-session VWAP (history from 2026-08-28)');
+
+breadth
+  .command('current')
+  .description('Get current HIP-3 breadth above the UTC-session VWAP')
+  .requiredOption('--exchange <exchange>', 'Must be hip3 for HIP-3 breadth')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthCurrentCommand);
+
+breadth
+  .command('history')
+  .description('Get historical HIP-3 breadth above the UTC-session VWAP (history begins on 2026-08-28)')
+  .requiredOption('--exchange <exchange>', 'Must be hip3 for HIP-3 breadth')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms; defaults to route window)')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms; defaults to now)')
+  .option('--interval <interval>', 'Aggregation interval: 5m, 15m, 30m, 1h, 4h, 1d')
+  .option('--limit <n>', 'Maximum records to return (max 1000)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthHistoryCommand);
 
 // ── oxa funding current / history ───────────────────────────────────────
 

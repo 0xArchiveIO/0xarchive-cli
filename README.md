@@ -4,6 +4,8 @@ Terminal-first access to 0xArchive market data.
 
 0xArchive is granular market data infrastructure for Hyperliquid and Lighter.xyz. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets.
 
+> Lighter channels support historical replay but not live subscriptions through the 0xArchive WebSocket. Use the Lighter REST commands for current data and the historical REST commands (or an SDK WebSocket replay) for stored history.
+
 Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
 
 ## Install
@@ -37,6 +39,13 @@ oxa trades fetch --exchange lighter --symbol BTC --limit 50
 # Fetch Hyperliquid HIP-3 builder-perp candles
 oxa candles --exchange hip3 --symbol km:US500 \
   --start 2026-02-28T00:00:00Z --end 2026-03-01T00:00:00Z --interval 1h
+
+# Read current HIP-3 breadth above the UTC-session VWAP
+oxa breadth current --exchange hip3
+
+# Read HIP-3 breadth history (history begins on 2026-08-28)
+oxa breadth history --exchange hip3 --start 2026-08-28T00:00:00Z \
+  --end 2026-08-29T00:00:00Z --interval 5m
 
 # Fetch HIP-4 outcome-market candles (coin 0 = outcome 0 / side 0)
 oxa candles --exchange hip4 --symbol 0 \
@@ -165,12 +174,34 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
 | `--interval` | No | `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d`, `1w` |
-| `--limit` | No | Maximum records to return |
-| `--cursor` | No | Pagination cursor |
+| `--limit` | No | Maximum rows: 10,000 for Hyperliquid, HIP-3, and Lighter; 1,000 for HIP-4 |
+| `--cursor` | No | Pass `nextCursor` from the previous page unchanged |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
-HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route.
+HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals and a maximum of 1,000 rows per request. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route, also capped at 1,000 rows. Candle cursors are returned as strings; pass them back unchanged rather than parsing their current numeric value.
+
+### `oxa breadth current` and `oxa breadth history`
+
+Get the current or historical HIP-3 breadth above the current UTC-session VWAP. The session resets at 00:00 UTC and compares the close of the most recently completed 1-minute candle. Instruments without session volume or with a price older than five minutes are excluded. `valuePct` is `null` when no instrument is eligible, never zero. History begins on 2026-08-28, with no synthetic pre-launch history. Historical intervals use the last snapshot in each bucket rather than averaging percentages.
+
+```bash
+oxa breadth current --exchange hip3
+oxa breadth history --exchange hip3 \
+  --start 2026-08-28T00:00:00Z --end 2026-08-29T00:00:00Z \
+  --interval 5m --limit 100
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | Must be `hip3` |
+| `--start` | No | Start time (ISO 8601 or Unix ms) |
+| `--end` | No | End time (ISO 8601 or Unix ms) |
+| `--interval` | No | `5m`, `15m`, `30m`, `1h`, `4h`, or `1d` |
+| `--limit` | No | Maximum 1,000 snapshots |
+| `--cursor` | No | Pagination cursor from the previous response |
+| `--out` | No | Write JSON output to a file |
+| `--format` | No | `json` (default) or `pretty` |
 
 ### `oxa funding current`
 
@@ -625,9 +656,11 @@ For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with on
 oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
 ```
 
-### `oxa stream ...` (realtime WebSocket)
+### `oxa stream ...` (live WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access, subscription caps, and replay limits are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
+Stream supported live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access and subscription caps are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
+
+Lighter channel names (`lighter_orderbook`, `lighter_trades`, `lighter_candles`, `lighter_open_interest`, `lighter_funding`, and `lighter_l3_orderbook`) are replay-only and are rejected locally with guidance to the Lighter REST commands. The CLI does not open a live socket for those names; use an SDK WebSocket replay for stored history.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
