@@ -55,7 +55,7 @@ import {
 } from './commands/spot.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, lighter, hip3, or hip4. ' +

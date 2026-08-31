@@ -76,6 +76,10 @@ oxa stream liquidations BTC
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
 | Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Spot candles from 2025-03-22T10:50:22Z at `1m`/`5m`/`15m`/`30m`/`1h`/`4h`/`1d`/`1w`, max 1000 rows; trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, or liquidations. |
 
+## Plans and Data Access
+
+Every command below works on every plan, including Free. Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. Plans gate capacity and Free's 30-day history window, not route families, schemas, or served depth. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
+
 ## Commands
 
 ### `oxa auth test`
@@ -581,7 +585,7 @@ oxa hip4 l4 history  0 --start ... --end ...
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route.
 
-Coverage: Spot candles from 2025-03-22T10:50:22Z, with `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, and `1w` intervals and a maximum limit of 1000; trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 326 pairs covered. Endpoint and history access are route- and plan-dependent; check current plan limits.
+Coverage: Spot candles from 2025-03-22T10:50:22Z, with `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, and `1w` intervals and a maximum limit of 1000; trades from 2025-03-22 (HL S3 backfill); orderbook, L4 diffs, L4 orders, and TWAP statuses live from 2026-05-05. 326 pairs covered. Every Spot route is available on every plan, including Free; on Free, history is limited to the most recent rolling 30 days (see [Plans and Data Access](#plans-and-data-access)).
 
 ```bash
 # Discovery
@@ -606,18 +610,18 @@ oxa spot twap-user 0xabc... --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:
 oxa spot freshness HYPE-USDC
 ```
 
-| Subcommand | Description | Plan |
-|---|---|---|
-| `oxa spot pairs` | List active spot pairs (326) | Check plan |
-| `oxa spot pair <symbol>` | Get a single spot pair | Check plan |
-| `oxa spot candles <symbol>` | Spot OHLCV candles from 2025-03-22T10:50:22Z; intervals `1m` through `1w`, max 1000 rows | Check plan |
-| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) | Check plan |
-| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. | Check plan |
-| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction | Check plan |
-| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution | Check plan |
-| `oxa spot twap <symbol>` | TWAP statuses for a single pair | Check plan |
-| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs | Check plan |
-| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP | Check plan |
+| Subcommand | Description |
+|---|---|
+| `oxa spot pairs` | List active spot pairs (326) |
+| `oxa spot pair <symbol>` | Get a single spot pair |
+| `oxa spot candles <symbol>` | Spot OHLCV candles from 2025-03-22T10:50:22Z; intervals `1m` through `1w`, max 1000 rows |
+| `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) |
+| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. |
+| `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction |
+| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution |
+| `oxa spot twap <symbol>` | TWAP statuses for a single pair |
+| `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs |
+| `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP |
 
 For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Example:
 
@@ -627,7 +631,7 @@ oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket access, subscription caps, and replay limits are plan-dependent; check current plan limits. Requires Node.js 22+ for the global `WebSocket`.
+Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Requires Node.js 22+ for the global `WebSocket`.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
