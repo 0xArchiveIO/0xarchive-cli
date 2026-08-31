@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.1 - 2026-08-31
+
+### Changed
+
+- Documented the open catalog and the Free plan history window in one pass. Every command works on every plan, including Free: every market, route, schema, and served depth. On Free, history is limited to the most recent rolling 30 days with a maximum 30-day span per request or replay; Build and above keep the full retained archive. Plans gate capacity and Free's 30-day history window, not route families, schemas, or served depth.
+- Removed the per-subcommand "Check plan" column and the "plan-dependent access" hedges from the Spot and stream sections; route access does not vary by plan.
+
 ## 1.8.0 - 2026-08-22
 
 ### Added
