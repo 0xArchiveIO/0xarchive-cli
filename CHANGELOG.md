@@ -10,6 +10,8 @@
 
 ### Changed
 
+- Correct Lighter per-fill trade history to the observed global floor of January 17, 2025; exact starts vary by market. This supersedes the August floor documented in the earlier release notes below.
+
 - Lighter WebSocket channel names are no longer accepted as live stream
   targets. The CLI now fails locally with guidance to Lighter REST for current
   data or SDK WebSocket replay for stored history.
