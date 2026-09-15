@@ -54,7 +54,7 @@ describe('HIP-4 candle coverage', () => {
               volume: 120,
             },
           ],
-          meta: { count: 1, next_cursor: 'next-page', request_id: 'req-1' },
+          meta: { count: 1, next_cursor: '1777680060000', request_id: 'req-1' },
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -65,7 +65,7 @@ describe('HIP-4 candle coverage', () => {
       end: 1777683600000,
       interval: '1h',
       limit: 100,
-      cursor: 'page-1',
+      cursor: '1777680000000',
     });
 
     const requestUrl = new URL(fetchMock.mock.calls[0][0] as string);
@@ -75,7 +75,7 @@ describe('HIP-4 candle coverage', () => {
       end: '1777683600000',
       interval: '1h',
       limit: '100',
-      cursor: 'page-1',
+      cursor: '1777680000000',
     });
     expect(result).toEqual({
       data: [
@@ -88,8 +88,58 @@ describe('HIP-4 candle coverage', () => {
           volume: 120,
         },
       ],
-      nextCursor: 'next-page',
+      nextCursor: '1777680060000',
     });
+  });
+
+  it('rejects HIP-4 candle limits above the served cap before a request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    interceptExit();
+
+    await expect(
+      candlesCommand({
+        exchange: 'hip4',
+        symbol: '0',
+        start: '2026-05-02T00:00:00Z',
+        end: '2026-05-02T01:00:00Z',
+        interval: '1h',
+        limit: '1001',
+        format: 'json',
+        apiKey: 'test-key',
+      }),
+    ).rejects.toMatchObject({ code: 2 });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows the served 10,000-row HIP-3 candle limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      fakeApiResponse({
+        success: true,
+        data: [],
+        meta: { count: 0, request_id: 'req-hip3-limit' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    interceptExit();
+
+    await expect(
+      candlesCommand({
+        exchange: 'hip3',
+        symbol: 'km:US500',
+        start: '2026-02-01T00:00:00Z',
+        end: '2026-02-02T00:00:00Z',
+        interval: '1h',
+        limit: '10000',
+        format: 'json',
+        apiKey: 'test-key',
+      }),
+    ).resolves.toBeUndefined();
+
+    const requestUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(requestUrl.pathname).toBe('/v1/hyperliquid/hip3/candles/km:US500');
+    expect(requestUrl.searchParams.get('limit')).toBe('10000');
   });
 
   it('allows valid HIP-4 candle CLI requests while retaining range validation', async () => {

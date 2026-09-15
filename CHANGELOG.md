@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- HIP-3 breadth commands for the current snapshot and historical series above
+  the current UTC-session VWAP. History begins on 2026-08-28 and keeps an
+  unavailable `valuePct` as `null` rather than rendering it as zero.
+
+### Changed
+
+- Correct Lighter per-fill trade history to the observed global floor of January 17, 2025; exact starts vary by market. This supersedes the August floor documented in the earlier release notes below.
+
+- Lighter WebSocket channel names are no longer accepted as live stream
+  targets. The CLI now fails locally with guidance to Lighter REST for current
+  data or SDK WebSocket replay for stored history.
+- The CLI now uses the typed HIP-3 breadth resources from `@0xarchive/sdk` 1.9.1 or newer.
+
 ## 1.8.1 - 2026-08-31
 
 ### Changed
