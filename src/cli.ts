@@ -55,7 +55,7 @@ import {
 } from './commands/spot.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.8.1';
+const VERSION = '1.9.0';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, lighter, hip3, or hip4. ' +
@@ -755,8 +755,10 @@ stream
 
 stream
   .command('trades <symbol>')
-  .description('Stream realtime trades for a symbol')
-  .option('--exchange <exchange>', 'hyperliquid (default), hip3, or lighter')
+  .description(
+    'Stream realtime trades for a symbol. Lighter trades arrive as two fills per trade (one per side, same tid).',
+  )
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, lighter, or spot')
   .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
   .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -765,8 +767,14 @@ stream
 
 stream
   .command('orderbook <symbol>')
-  .description('Stream realtime L2 orderbook updates for a symbol')
-  .option('--exchange <exchange>', 'hyperliquid (default), hip3, or lighter')
+  .description(
+    'Stream realtime L2 orderbook updates for a symbol. Lighter sends a full top-20 book, one per second by default.',
+  )
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, lighter, or spot')
+  .option(
+    '--interval-ms <ms>',
+    'Lighter only: milliseconds between books, 100 to 5000 (default 1000). Each book is the newest full state.',
+  )
   .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
   .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -774,14 +782,23 @@ stream
   .action(streamOrderbookCommand);
 
 // Generic channel subscription. Use this for spot (spot_orderbook,
-// spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap) and any other
-// raw WebSocket channel name not covered by the dedicated verbs above.
+// spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap), Lighter
+// (lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding)
+// and any other raw WebSocket channel name not covered by the dedicated verbs
+// above. lighter_candles and lighter_l3_orderbook are replay-only and are
+// rejected before a socket is opened.
 stream
   .command('subscribe <channel> <symbol>')
   .description(
     'Subscribe to a raw WebSocket channel by name. ' +
       'For spot: spot_orderbook, spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap. ' +
-      'Symbols are dashed canonical for spot (HYPE-USDC, PURR-USDC).',
+      'Symbols are dashed canonical for spot (HYPE-USDC, PURR-USDC). ' +
+      'For Lighter: lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding ' +
+      '(lighter_candles and lighter_l3_orderbook are replay-only).',
+  )
+  .option(
+    '--interval-ms <ms>',
+    'lighter_orderbook only: milliseconds between books, 100 to 5000 (default 1000)',
   )
   .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
   .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
