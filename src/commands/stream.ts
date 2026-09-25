@@ -12,7 +12,6 @@ import {
   validateFormat,
   EXIT,
   exitError,
-  outputJson,
   prettyDim,
 } from '../lib/output.js';
 
@@ -23,24 +22,24 @@ interface StreamOptions {
   apiKey?: string;
   format: string;
   durationMs?: string;
+  intervalMs?: string;
   url?: string;
 }
 
-// Allow-listed channels for the dedicated `oxa stream <verb>` commands.
-// The `oxa stream subscribe <channel>` form bypasses this list and forwards
-// any channel name to the server (used for spot_orderbook, spot_trades,
-// spot_l4_diffs, spot_l4_orders, spot_twap and any future channels).
+// Channels the dedicated `oxa stream <verb>` commands can resolve to.
 type Channel =
   | 'liquidations'
   | 'hip3_liquidations'
   | 'trades'
-  | 'orderbook'
-  | 'spot_orderbook'
+  | 'hip3_trades'
+  | 'lighter_trades'
   | 'spot_trades'
-  | 'spot_l4_diffs'
-  | 'spot_l4_orders'
-  | 'spot_twap';
+  | 'orderbook'
+  | 'hip3_orderbook'
+  | 'lighter_orderbook'
+  | 'spot_orderbook';
 
+// Allow-listed channels for `oxa stream subscribe <channel> <symbol>`.
 const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'liquidations',
   'hip3_liquidations',
@@ -57,10 +56,8 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'hip3_l4_orders',
   'lighter_orderbook',
   'lighter_trades',
-  'lighter_candles',
   'lighter_open_interest',
   'lighter_funding',
-  'lighter_l3_orderbook',
   'hip3_orderbook',
   'hip3_trades',
   'hip3_candles',
@@ -73,23 +70,54 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'spot_twap',
 ]);
 
-function resolveChannel(rawChannel: string, exchange?: string): Channel {
-  const ch = rawChannel.toLowerCase();
-  if (ch === 'liquidations') {
-    if (exchange === 'hip3') return 'hip3_liquidations';
-    return 'liquidations';
+// Lighter channels that support historical replay but not live
+// subscriptions. They are rejected before a socket is opened, with a pointer
+// to the REST command that serves the same data.
+export const LIGHTER_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
+  lighter_candles: 'Use `oxa candles --exchange lighter` for candle history.',
+  lighter_l3_orderbook:
+    'Use `oxa l3 get` for the current L3 book or `oxa l3 history` for stored snapshots.',
+};
+
+// lighter_orderbook sends the newest full book at most once per interval.
+export const LIGHTER_BOOK_INTERVAL_MIN_MS = 100;
+export const LIGHTER_BOOK_INTERVAL_MAX_MS = 5000;
+
+// Which `--exchange` values each dedicated verb accepts, and the channel each
+// one maps to. Omitting `--exchange` means hyperliquid.
+const VERB_CHANNELS: Readonly<Record<string, Readonly<Record<string, Channel>>>> = {
+  liquidations: {
+    hyperliquid: 'liquidations',
+    hip3: 'hip3_liquidations',
+  },
+  trades: {
+    hyperliquid: 'trades',
+    hip3: 'hip3_trades',
+    lighter: 'lighter_trades',
+    spot: 'spot_trades',
+  },
+  orderbook: {
+    hyperliquid: 'orderbook',
+    hip3: 'hip3_orderbook',
+    lighter: 'lighter_orderbook',
+    spot: 'spot_orderbook',
+  },
+};
+
+export function resolveChannel(verb: string, exchange?: string): Channel {
+  const channels = Object.hasOwn(VERB_CHANNELS, verb) ? VERB_CHANNELS[verb] : undefined;
+  if (!channels) {
+    exitError(`Unknown stream channel "${verb}".`, EXIT.VALIDATION);
   }
-  if (ch === 'hip3_liquidations') return 'hip3_liquidations';
-  if (ch === 'trades') {
-    if (exchange === 'spot') return 'spot_trades';
-    return 'trades';
+  const ex = (exchange ?? 'hyperliquid').toLowerCase();
+  const channel = Object.hasOwn(channels, ex) ? channels[ex] : undefined;
+  if (!channel) {
+    exitError(
+      `Invalid exchange "${exchange}" for \`oxa stream ${verb}\`. Must be one of: ${Object.keys(channels).join(', ')}.`,
+      EXIT.VALIDATION,
+    );
   }
-  if (ch === 'orderbook') {
-    if (exchange === 'spot') return 'spot_orderbook';
-    return 'orderbook';
-  }
-  if (ch.startsWith('spot_')) return ch as Channel;
-  exitError(`Unknown stream channel "${rawChannel}".`, EXIT.VALIDATION);
+  return channel;
 }
 
 function parseDuration(raw?: string): number | undefined {
@@ -101,16 +129,62 @@ function parseDuration(raw?: string): number | undefined {
   return n;
 }
 
+/**
+ * Validate `--interval-ms` for the resolved channel. Only lighter_orderbook
+ * takes an interval; the server applies the same bounds.
+ */
+export function parseIntervalMs(raw: string | undefined, channel: string): number | undefined {
+  if (raw === undefined) return undefined;
+  if (channel !== 'lighter_orderbook') {
+    exitError(
+      '--interval-ms is only supported on lighter_orderbook ' +
+        '(`oxa stream orderbook <symbol> --exchange lighter` or `oxa stream subscribe lighter_orderbook <symbol>`).',
+      EXIT.VALIDATION,
+    );
+  }
+  const n = Number(raw);
+  if (
+    raw.trim() === '' ||
+    !Number.isInteger(n) ||
+    n < LIGHTER_BOOK_INTERVAL_MIN_MS ||
+    n > LIGHTER_BOOK_INTERVAL_MAX_MS
+  ) {
+    exitError(
+      `--interval-ms must be a whole number between ${LIGHTER_BOOK_INTERVAL_MIN_MS} and ` +
+        `${LIGHTER_BOOK_INTERVAL_MAX_MS} for lighter_orderbook (got ${raw}). Leave it out for one book a second.`,
+      EXIT.VALIDATION,
+    );
+  }
+  return n;
+}
+
+export function buildSubscribeMessage(
+  channel: string,
+  symbol: string,
+  intervalMs?: number,
+): Record<string, unknown> {
+  const message: Record<string, unknown> = { op: 'subscribe', channel, symbol };
+  if (intervalMs !== undefined) message.interval_ms = intervalMs;
+  return message;
+}
+
+// Best-effort event time for the pretty summary line. Replay rows carry
+// `timestamp`; live books and fills carry `time` (fills arrive as an array).
+function eventTime(payload: any): string | number {
+  const data = payload?.data;
+  const first = Array.isArray(data) ? data[0] : data;
+  return first?.timestamp ?? first?.time ?? payload?.timestamp ?? '';
+}
+
 async function streamChannel(
-  rawChannel: string,
+  channel: string,
   symbol: string,
   options: StreamOptions,
-  preResolved?: string,
 ): Promise<void> {
   const format = validateFormat(options.format);
-  const apiKey = resolveApiKey(options.apiKey);
-  const channel = preResolved ?? resolveChannel(rawChannel, options.exchange);
   const durationMs = parseDuration(options.durationMs);
+  const intervalMs = parseIntervalMs(options.intervalMs, channel);
+  const apiKey = resolveApiKey(options.apiKey);
 
   if (typeof (globalThis as any).WebSocket !== 'function') {
     exitError(
@@ -129,22 +203,30 @@ async function streamChannel(
   const ws = new WS(url);
 
   let opened = false;
+  // Set when the CLI closes the socket itself (--duration-ms or Ctrl-C). The
+  // server may end the session without a close handshake, which surfaces as
+  // an `error` event followed by a 1006 close; that is a normal stop here.
+  let closing = false;
   let timer: NodeJS.Timeout | undefined;
+
+  const closeSocket = () => {
+    closing = true;
+    try {
+      ws.close();
+    } catch {
+      // ignore
+    }
+  };
 
   ws.addEventListener('open', () => {
     opened = true;
-    ws.send(JSON.stringify({ op: 'subscribe', channel, symbol }));
+    ws.send(JSON.stringify(buildSubscribeMessage(channel, symbol, intervalMs)));
     if (format === 'pretty') {
-      prettyDim(`subscribed: channel=${channel} symbol=${symbol}`);
+      const interval = intervalMs !== undefined ? ` interval_ms=${intervalMs}` : '';
+      prettyDim(`subscribed: channel=${channel} symbol=${symbol}${interval}`);
     }
     if (durationMs !== undefined) {
-      timer = setTimeout(() => {
-        try {
-          ws.close();
-        } catch {
-          // ignore
-        }
-      }, durationMs);
+      timer = setTimeout(closeSocket, durationMs);
     }
   });
 
@@ -167,24 +249,24 @@ async function streamChannel(
       exitError(`stream error: ${payload.message ?? 'unknown error'}`, EXIT.NETWORK);
     }
 
-    // Pass through data and historical_data envelopes as NDJSON.
+    // Pass through data and historical_data envelopes, one JSON record per line.
     if (format === 'pretty') {
-      const ts = payload?.data?.timestamp ?? payload?.timestamp ?? '';
       const ch = payload?.channel ?? channel;
-      process.stdout.write(`[${ch}] ${ts} ${JSON.stringify(payload?.data ?? payload)}\n`);
+      process.stdout.write(`[${ch}] ${eventTime(payload)} ${JSON.stringify(payload?.data ?? payload)}\n`);
     } else {
-      outputJson(payload);
+      process.stdout.write(JSON.stringify(payload) + '\n');
     }
   });
 
   ws.addEventListener('error', (event: Event) => {
+    if (closing) return;
     const message = (event as any)?.message ?? 'WebSocket error';
     exitError(`websocket error: ${message}`, EXIT.NETWORK);
   });
 
   ws.addEventListener('close', (event: any) => {
     if (timer) clearTimeout(timer);
-    if (!opened) {
+    if (!opened && !closing) {
       exitError(
         `websocket closed before open (code=${event.code}). Check the URL and your API key.`,
         EXIT.NETWORK,
@@ -193,27 +275,20 @@ async function streamChannel(
     process.exit(EXIT.SUCCESS);
   });
 
-  const shutdown = () => {
-    try {
-      ws.close();
-    } catch {
-      // ignore
-    }
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', closeSocket);
+  process.on('SIGTERM', closeSocket);
 }
 
 export async function streamLiquidationsCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel('liquidations', symbol, options);
+  return streamChannel(resolveChannel('liquidations', options.exchange), symbol, options);
 }
 
 export async function streamTradesCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel('trades', symbol, options);
+  return streamChannel(resolveChannel('trades', options.exchange), symbol, options);
 }
 
 export async function streamOrderbookCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel('orderbook', symbol, options);
+  return streamChannel(resolveChannel('orderbook', options.exchange), symbol, options);
 }
 
 export async function streamGenericCommand(
@@ -222,11 +297,17 @@ export async function streamGenericCommand(
   options: StreamOptions,
 ): Promise<void> {
   const ch = String(channel).toLowerCase();
+  if (Object.hasOwn(LIGHTER_REPLAY_ONLY_CHANNELS, ch)) {
+    exitError(
+      `${ch} supports historical replay only; live subscriptions are not available on this channel. ${LIGHTER_REPLAY_ONLY_CHANNELS[ch]}`,
+      EXIT.VALIDATION,
+    );
+  }
   if (!VALID_GENERIC_CHANNELS.has(ch)) {
     exitError(
       `Unknown stream channel "${channel}". Valid channels: ${Array.from(VALID_GENERIC_CHANNELS).sort().join(', ')}.`,
       EXIT.VALIDATION,
     );
   }
-  return streamChannel(ch, symbol, options, ch);
+  return streamChannel(ch, symbol, options);
 }
