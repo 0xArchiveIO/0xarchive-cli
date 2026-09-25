@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.0 - 2026-09-25
+
+### Added
+
+- Live Lighter streams. `oxa stream orderbook <symbol> --exchange lighter` and `oxa stream trades <symbol> --exchange lighter` subscribe to `lighter_orderbook` and `lighter_trades`, and `oxa stream subscribe` accepts `lighter_orderbook`, `lighter_trades`, `lighter_open_interest`, and `lighter_funding`. Lighter live data is served on `wss://api.0xarchive.io/ws`, the CLI default. The README describes each live message shape and how it differs from replay rows.
+- `--interval-ms` on `oxa stream orderbook --exchange lighter` and `oxa stream subscribe lighter_orderbook`: milliseconds between full books, 100 to 5000 (default 1000). It is validated before connecting and rejected on every other channel.
+- A Lighter drop notice (`Dropped ~N live <channel> messages ...`) is written to stderr as a warning and the stream continues, because the server keeps the subscription running. The server's `Stopped the <channel> stream ...` notice, and every other server error, still exits with code 4.
+
+### Changed
+
+- `oxa stream subscribe lighter_candles` and `oxa stream subscribe lighter_l3_orderbook` now fail before opening a socket, because both channels are replay-only, and point to `oxa candles --exchange lighter` and `oxa l3 get` / `oxa l3 history`.
+- `oxa stream trades`, `oxa stream orderbook`, and `oxa stream liquidations` reject an `--exchange` value they do not support instead of ignoring it.
+
+### Fixed
+
+- `--exchange lighter` and `--exchange hip3` on `oxa stream trades` and `oxa stream orderbook` were ignored, so the command streamed the Hyperliquid channel instead. They now subscribe to the Lighter and HIP-3 channels.
+- Stream output in JSON mode is now one JSON record per line (NDJSON), as documented. It was previously pretty-printed across several lines.
+- Stopping a stream with `--duration-ms` or Ctrl-C now exits with code 0. It previously exited with code 4 and an empty `websocket error` when the server ended the session without a close handshake.
+- The `--format pretty` summary line now shows the event time for live books and fills, not only for replay rows.
+
 ## 1.8.1 - 2026-08-31
 
 ### Changed
