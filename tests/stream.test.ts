@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LIGHTER_REPLAY_ONLY_CHANNELS,
   buildSubscribeMessage,
+  isLighterDropNotice,
   parseIntervalMs,
   resolveChannel,
   streamGenericCommand,
@@ -183,6 +184,26 @@ describe('lighter_orderbook --interval-ms', () => {
   );
 });
 
+describe('Lighter drop notices', () => {
+  it('matches a drop notice on any Lighter live channel', () => {
+    for (const channel of ['lighter_orderbook', 'lighter_trades', 'lighter_open_interest', 'lighter_funding']) {
+      expect(isLighterDropNotice(channel, `Dropped ~3 live ${channel} messages for BTC: ...`)).toBe(true);
+    }
+  });
+
+  it('does not match the stop notice, other errors, or non-Lighter channels', () => {
+    expect(
+      isLighterDropNotice(
+        'lighter_trades',
+        'Stopped the lighter_trades stream for BTC: your connection is too slow to keep up. Re-subscribe to resume.',
+      ),
+    ).toBe(false);
+    expect(isLighterDropNotice('lighter_trades', 'Unknown Lighter symbol NOPE.')).toBe(false);
+    expect(isLighterDropNotice('trades', 'Dropped ~3 live messages: your connection fell behind.')).toBe(false);
+    expect(isLighterDropNotice('l4_diffs', 'Dropped ~3 live messages: your connection fell behind.')).toBe(false);
+  });
+});
+
 describe('oxa stream over a WebSocket', () => {
   let savedWsUrl: string | undefined;
 
@@ -254,13 +275,48 @@ describe('oxa stream over a WebSocket', () => {
     expect(stdoutLines().at(-1)).toBe(`[lighter_orderbook] 1790294171459 ${JSON.stringify(LIGHTER_BOOK)}\n`);
   });
 
-  it('exits with a network error when the server sends an error notice', async () => {
+  it('keeps streaming after a Lighter drop notice and reports it on stderr as a warning', async () => {
     await streamTradesCommand('BTC', { exchange: 'lighter', format: 'json' });
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     const message =
       'Dropped ~12 live lighter_trades messages for BTC: your connection fell behind the Lighter stream, ' +
       'and those trades were not delivered.';
+    expect(() => ws.message({ type: 'error', message })).not.toThrow();
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(stderrPayloads().at(-1)).toEqual({ warning: `stream warning: ${message}`, type: 'lag' });
+
+    const frame = { type: 'data', channel: 'lighter_trades', coin: 'BTC', symbol: 'BTC', data: [] };
+    ws.message(frame);
+    expect(stdoutLines()).toEqual([JSON.stringify(frame) + '\n']);
+  });
+
+  it('exits with a network error when the server stops a lagging Lighter subscription', async () => {
+    await streamTradesCommand('BTC', { exchange: 'lighter', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message =
+      'Stopped the lighter_trades stream for BTC: your connection is too slow to keep up. Re-subscribe to resume.';
+    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
+    expect(process.exit).toHaveBeenCalledWith(4);
+    expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
+  });
+
+  it('still exits on a drop notice for a non-Lighter channel', async () => {
+    await streamGenericCommand('l4_diffs', 'BTC', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message = 'Dropped ~5 live messages: your connection fell behind the Hyperliquid stream.';
+    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
+    expect(process.exit).toHaveBeenCalledWith(4);
+    expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
+  });
+
+  it('exits with a network error on any other server error', async () => {
+    await streamOrderbookCommand('NOPE', { exchange: 'lighter', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message = 'Unknown Lighter symbol NOPE.';
     expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
   });

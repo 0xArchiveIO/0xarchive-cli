@@ -6,6 +6,7 @@
 
 - Live Lighter streams. `oxa stream orderbook <symbol> --exchange lighter` and `oxa stream trades <symbol> --exchange lighter` subscribe to `lighter_orderbook` and `lighter_trades`, and `oxa stream subscribe` accepts `lighter_orderbook`, `lighter_trades`, `lighter_open_interest`, and `lighter_funding`. Lighter live data is served on `wss://api.0xarchive.io/ws`, the CLI default. The README describes each live message shape and how it differs from replay rows.
 - `--interval-ms` on `oxa stream orderbook --exchange lighter` and `oxa stream subscribe lighter_orderbook`: milliseconds between full books, 100 to 5000 (default 1000). It is validated before connecting and rejected on every other channel.
+- A Lighter drop notice (`Dropped ~N live <channel> messages ...`) is written to stderr as a warning and the stream continues, because the server keeps the subscription running. The server's `Stopped the <channel> stream ...` notice, and every other server error, still exits with code 4.
 
 ### Changed
 

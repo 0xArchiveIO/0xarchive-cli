@@ -768,7 +768,7 @@ stream
 stream
   .command('orderbook <symbol>')
   .description(
-    'Stream realtime L2 orderbook updates for a symbol. Lighter sends a full top-20 book, one per second by default.',
+    'Stream realtime L2 orderbook updates for a symbol. Lighter sends a full top-20 book, at most one per second by default.',
   )
   .option('--exchange <exchange>', 'hyperliquid (default), hip3, lighter, or spot')
   .option(

@@ -56,7 +56,7 @@ oxa spot pair HYPE-USDC
 # Stream live Hyperliquid liquidations (requires Node 22+)
 oxa stream liquidations BTC
 
-# Stream live Lighter order books (one full top-20 book per second by default)
+# Stream live Lighter order books (at most one full top-20 book per second by default)
 oxa stream orderbook BTC --exchange lighter --duration-ms 10000
 ```
 
@@ -626,10 +626,11 @@ oxa spot freshness HYPE-USDC
 | `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs |
 | `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP |
 
-For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Example:
+For realtime spot streams, use `oxa stream subscribe <channel> <symbol>` with one of `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap`. Spot trades and books are also available through `oxa stream trades` and `oxa stream orderbook` with `--exchange spot`. Example:
 
 ```bash
 oxa stream subscribe spot_trades HYPE-USDC --duration-ms 60000
+oxa stream trades HYPE-USDC --exchange spot --duration-ms 60000
 ```
 
 ### `oxa stream ...` (realtime WebSocket)
@@ -649,7 +650,7 @@ oxa stream trades km:US500 --exchange hip3
 oxa stream orderbook BTC --duration-ms 60000
 
 # Lighter (see "Lighter live channels" below)
-oxa stream orderbook BTC --exchange lighter                    # one full top-20 book per second
+oxa stream orderbook BTC --exchange lighter                    # at most one full top-20 book per second
 oxa stream orderbook BTC --exchange lighter --interval-ms 250  # at most one book every 250 ms
 oxa stream trades BTC --exchange lighter
 oxa stream subscribe lighter_funding BTC
@@ -665,13 +666,13 @@ oxa stream subscribe lighter_open_interest BTC
 | `--url` | All | Override the WebSocket URL (or set `OXA_WS_URL`) |
 | `--format` | All | `json` (NDJSON, default) or `pretty` |
 
-Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with `is_liquidation: true`. To stop early, send SIGINT (Ctrl-C) or pass `--duration-ms`; both exit with code 0. Any error message from the server (for example an unknown symbol, or a notice that your connection fell behind) is written to stderr and the CLI exits with code 4, so a supervising script can restart the stream.
+Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with `is_liquidation: true`. To stop early, send SIGINT (Ctrl-C) or pass `--duration-ms`; both exit with code 0. Any error message from the server (for example an unknown symbol, or a notice that your connection fell behind) is written to stderr and the CLI exits with code 4, so a supervising script can restart the stream. The one exception is a Lighter drop notice, which the CLI reports as a warning while the stream continues (see [Lighter live channels](#lighter-live-channels)).
 
 #### Lighter live channels
 
 Live subscriptions are available for four Lighter channels: `lighter_orderbook`, `lighter_trades`, `lighter_open_interest`, and `lighter_funding`. `lighter_candles` and `lighter_l3_orderbook` support historical replay only; the CLI rejects them before opening a socket and points to `oxa candles --exchange lighter` and `oxa l3 get` / `oxa l3 history`.
 
-Lighter live data is served on `wss://api.0xarchive.io/ws`, the CLI default. `stream.0xarchive.io` carries a subset of Hyperliquid live channels and no Lighter channels; a Lighter subscribe there returns an error pointing to `wss://api.0xarchive.io/ws`.
+Lighter live data is served on `wss://api.0xarchive.io/ws`, the CLI default. It is available on every plan, and every live Lighter message is metered per message, the same as Hyperliquid live data. `stream.0xarchive.io` carries a subset of Hyperliquid live channels and no Lighter channels; a Lighter subscribe there returns an error pointing to `wss://api.0xarchive.io/ws`.
 
 Symbols are the same as `oxa instruments --exchange lighter`. They are case-insensitive on subscribe and echoed uppercase. Messages use the same envelope as Hyperliquid live data. Example messages (the book is cut to one level per side here; the trade is one trade, two fills):
 
@@ -682,10 +683,10 @@ Symbols are the same as `oxa instruments --exchange lighter`. They are case-inse
 ```
 
 - **`lighter_orderbook`**: every message is a full book of up to 20 levels per side, not a diff. `levels[0]` holds bids, best (highest) first, and `levels[1]` holds asks, best (lowest) first. `px` and `sz` are decimal strings exactly as Lighter publishes them, and `n` is always `1` because Lighter does not publish per-level order counts. `time` is Lighter's book update time in milliseconds. The server sends the newest book at most once per interval: once a second by default, or every `--interval-ms` (100 to 5000). Each book sent is one metered message. On subscribe, the current book is sent immediately when one is available; illiquid markets can go minutes without a change. A slow reader receives fewer books, never an older book in place of a newer one.
-- **`lighter_trades`**: `data` is an array of fills with two fills per trade, one per side, sharing a `tid`. `side` is `A` (ask side) or `B` (bid side), `crossed: true` marks the taker leg, `users` holds the Lighter account index as a string, `oid` is that side's order id, `start_position` is that account's signed position before the trade, `hash` is the Lighter transaction hash, and `time` is in milliseconds. `fee`, `fee_token`, `closed_pnl`, and `dir` are always `null` in live messages because Lighter's live stream does not carry them. Count trades by distinct `tid`, not by array length, and compute volume from one leg per `tid`. Live trades are delivered as they happen and are preliminary. The finalized record, including fees, comes from `oxa trades fetch --exchange lighter --start ... --end ...`, which returns reconciled trades only; without a range, `oxa trades fetch --exchange lighter` returns the preliminary recent tier.
-- **`lighter_open_interest`** and **`lighter_funding`** carry the same message, a `ctx` object of market stats. `openInterest` is Lighter's reported open interest, the same quantity `oxa oi current --exchange lighter` returns. `funding` is Lighter's current funding rate as a fraction (Lighter publishes percent; the value is divided by 100), in the same units as `oxa funding current --exchange lighter`, and `premium` is also a fraction. `markPx` is the mark price, `oraclePx` is Lighter's index price, `midPx` is the mid price, `dayNtlVlm` and `dayBaseVlm` are 24h quote and base volume, `prevDayPx` is derived from the last trade price and Lighter's 24h percent change, and `impactPxs` is always `null` (Lighter has no impact prices). Updates arrive as Lighter publishes them, about once per second per market, and the latest values are sent on subscribe when available.
+- **`lighter_trades`**: `data` is an array of fills with two fills per trade, one per side, sharing a `tid`. `side` is `A` (ask side) or `B` (bid side), `crossed: true` marks the taker leg, `users` holds the Lighter account index as a string, `oid` is that side's order id, `start_position` is that account's signed position before the trade, `hash` is the Lighter transaction hash, and `time` is in milliseconds. `fee`, `fee_token`, `closed_pnl`, and `dir` are always `null` in live messages because Lighter's live stream does not carry them. Count trades by distinct `tid`, not by array length, and compute volume from one leg per `tid`. Live trades are delivered as they happen and are preliminary. The finalized record, including fees, comes from `oxa trades fetch --exchange lighter --symbol BTC --start ... --end ...`, which returns reconciled trades only; without a range, `oxa trades fetch --exchange lighter --symbol BTC` returns the preliminary recent tier.
+- **`lighter_open_interest`** and **`lighter_funding`** carry the same message, a `ctx` object of market stats, so one subscription is enough; subscribing to both delivers, and meters, every update twice. `openInterest` is Lighter's reported open interest, the same quantity `oxa oi current --exchange lighter --symbol BTC` returns. `funding` is Lighter's current funding rate as a fraction (Lighter publishes percent; the value is divided by 100), in the same units as `oxa funding current --exchange lighter --symbol BTC`, and `premium` is also a fraction. `markPx` is the mark price, `oraclePx` is Lighter's index price, `midPx` is the mid price, `dayNtlVlm` and `dayBaseVlm` are 24h quote and base volume, `prevDayPx` is derived from the last trade price and Lighter's 24h percent change, and `impactPxs` is always `null` (Lighter has no impact prices). Updates arrive as Lighter publishes them, about once per second per market, and the latest values are sent on subscribe when available.
 
-If your connection falls behind `lighter_trades` or the stats channels, the server sends an error notice (for example `Dropped ~N live lighter_trades messages for BTC: your connection fell behind the Lighter stream, and those trades were not delivered.`) and stops the subscription if the lag persists. As described above, the CLI exits with code 4 on either notice.
+If your connection falls behind `lighter_trades` or the stats channels, the server sends an error notice (for example `Dropped ~N live lighter_trades messages for BTC: your connection fell behind the Lighter stream, and those trades were not delivered.`) and keeps the subscription running. The CLI writes that notice to stderr as a warning line (`{"warning":"stream warning: Dropped ~N ...","type":"lag"}`) and keeps streaming; missed trades are not resent. If the lag persists, the server stops the subscription (`Stopped the lighter_trades stream for BTC: your connection is too slow to keep up. Re-subscribe to resume.`) and the CLI exits with code 4, like any other server error.
 
 WebSocket replay of all six Lighter channels is unchanged and keeps its existing `historical_data` row shapes, which differ from the live shapes above. The CLI does not start replays; use an SDK or the WebSocket API directly for replay.
 
