@@ -79,6 +79,16 @@ export const LIGHTER_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
     'Use `oxa l3 get` for the current L3 book or `oxa l3 history` for stored snapshots.',
 };
 
+// A connection that falls behind a Lighter live channel gets a
+// "Dropped ~N live <channel> messages ..." error notice while the subscription
+// keeps running: books and stats are full states, and trades are independent
+// rows, so the stream stays usable. The CLI reports these as warnings and
+// keeps streaming. The server's "Stopped the <channel> stream ..." notice ends
+// the subscription and, like every other server error, still exits.
+export function isLighterDropNotice(channel: string, message: string): boolean {
+  return channel.startsWith('lighter_') && message.startsWith('Dropped ~');
+}
+
 // lighter_orderbook sends the newest full book at most once per interval.
 export const LIGHTER_BOOK_INTERVAL_MIN_MS = 100;
 export const LIGHTER_BOOK_INTERVAL_MAX_MS = 5000;
@@ -246,7 +256,12 @@ async function streamChannel(
     }
 
     if (payload?.type === 'error') {
-      exitError(`stream error: ${payload.message ?? 'unknown error'}`, EXIT.NETWORK);
+      const message = String(payload.message ?? 'unknown error');
+      if (isLighterDropNotice(channel, message)) {
+        process.stderr.write(JSON.stringify({ warning: `stream warning: ${message}`, type: 'lag' }) + '\n');
+        return;
+      }
+      exitError(`stream error: ${message}`, EXIT.NETWORK);
     }
 
     // Pass through data and historical_data envelopes, one JSON record per line.
