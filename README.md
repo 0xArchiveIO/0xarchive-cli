@@ -81,7 +81,7 @@ oxa stream orderbook BTC --exchange lighter --duration-ms 10000
 | --- | --- | --- |
 | Hyperliquid | `--exchange hyperliquid` | `BTC`, `ETH`, `SOL`, etc. |
 | Lighter (mainnet) | `--exchange lighter` | `BTC`, `ETH`, etc. |
-| Lighter on Robinhood Chain | `--exchange rh-lighter` | USDG-quoted. Perps are uppercase (`BTC`, `ETH`); spot markets are dashed (`AAPL-USDG`). 84 markets: 57 perp, 27 spot. Trades from 2026-06-26 20:10:26 UTC (venue launch); liquidations, order book, OI, and funding from 2026-08-22 18:43 UTC; candles from 2026-06-26 once they are enabled for this deployment. No L3. |
+| Lighter on Robinhood Chain | `--exchange rh-lighter` | USDG-quoted. Perps are uppercase (`BTC`, `ETH`); spot markets are dashed (`AAPL-USDG`). 84 markets: 57 perp, 27 spot. Trades and liquidations from 2026-06-26 20:10:26 UTC (venue launch); order book, OI, and funding from 2026-08-22 18:43 UTC; candles from 2026-06-26 once they are enabled for this deployment. No L3. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
 | Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Spot candles from 2025-03-22T10:50:22Z at `1m`/`5m`/`15m`/`30m`/`1h`/`4h`/`1d`/`1w`, max 1000 rows; trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, or liquidations. |
@@ -256,7 +256,7 @@ oxa instruments --exchange <exchange> [--format <format>]
 
 ### `oxa liquidations history`
 
-Get liquidation history for Hyperliquid, HIP-3, and both Lighter deployments. Lighter mainnet liquidations are served from 2026-06-10 and Lighter on Robinhood Chain liquidations from 2026-08-22 18:43 UTC.
+Get liquidation history for Hyperliquid, HIP-3, and both Lighter deployments. Lighter mainnet liquidations are served from 2026-06-10 and Lighter on Robinhood Chain liquidations from 2026-06-26 20:10:26 UTC, the venue's first trade. A Robinhood Chain range before the first liquidation (2026-06-27 23:14 UTC) returns no rows rather than an error.
 
 ```bash
 oxa liquidations history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -272,7 +272,7 @@ oxa liquidations history --exchange <exchange> --symbol <symbol> --start <time> 
 | `--cursor` | No | Pagination cursor |
 | `--format` | No | `json` (default) or `pretty` |
 
-Lighter liquidation rows keep the trade's raw fields rather than a single liquidated user: `liquidationType`, `price`, `size`, `usdAmount`, the ask and bid accounts and order ids, each side's position before the trade, `txHash`, and `rawJson`, the untouched trade object. On rows backfilled from the venue's own export, `source` is `bucket` and `rawJson` is empty.
+Lighter liquidation rows keep the trade's raw fields rather than a single liquidated user: `liquidationType`, `price`, `size`, `usdAmount`, the ask and bid accounts and order ids, each side's position before the trade, `txHash`, and `rawJson`, the untouched trade object. Robinhood Chain rows from before live capture (2026-06-27 to 2026-08-22) were backfilled from the venue's finalized export: they carry `source` `bucket` and an empty `rawJson`. Live-captured rows carry `source` `ws` and the venue's raw JSON in `rawJson`.
 
 ### `oxa liquidations volume`
 

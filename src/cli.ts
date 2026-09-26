@@ -249,7 +249,10 @@ const liquidations = program
 
 liquidations
   .command('history')
-  .description('Get liquidation history')
+  .description(
+    'Get liquidation history (Lighter mainnet from 2026-06-10; Lighter on Robinhood Chain from 2026-06-26 20:10:26 UTC, ' +
+      'with rows before 2026-08-22 backfilled from the venue\'s finalized export: source "bucket", empty rawJson)',
+  )
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')

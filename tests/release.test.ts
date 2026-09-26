@@ -28,4 +28,14 @@ describe('release metadata', () => {
   it('presents Robinhood Chain as a Lighter deployment', () => {
     expect(readme).toContain('Lighter has two deployments: mainnet and Robinhood Chain.');
   });
+
+  it('states the Robinhood Chain liquidations floor the API serves', () => {
+    expect(readme).toContain('Trades and liquidations from 2026-06-26 20:10:26 UTC');
+    expect(readme).toContain('Lighter on Robinhood Chain liquidations from 2026-06-26 20:10:26 UTC');
+    expect(changelog).toContain('Trades and liquidations are served from 2026-06-26 20:10:26 UTC');
+    for (const doc of [readme, changelog]) {
+      expect(doc).not.toMatch(/liquidations,? (order book|and order book)[^.]*2026-08-22/);
+      expect(doc).not.toContain('Robinhood Chain liquidations from 2026-08-22');
+    }
+  });
 });
