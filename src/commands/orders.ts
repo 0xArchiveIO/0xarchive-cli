@@ -1,6 +1,7 @@
 import {
   resolveApiKey,
   validateExchange,
+  requireExchange,
   createClient,
   getExchangeClient,
   type Exchange,
@@ -39,6 +40,7 @@ interface OrdersHistoryOptions {
 export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'order history');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -128,6 +130,7 @@ interface OrdersFlowOptions {
 export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'order flow');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -202,6 +205,7 @@ interface OrdersTpslOptions {
 export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'TP/SL order');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');

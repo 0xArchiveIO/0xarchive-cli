@@ -103,9 +103,12 @@ describe('oxa stream channel resolution', () => {
     ['trades', 'lighter', 'lighter_trades'],
     ['trades', 'Lighter', 'lighter_trades'],
     ['trades', 'spot', 'spot_trades'],
+    ['trades', 'rh-lighter', 'rh_lighter_trades'],
+    ['trades', 'RH-Lighter', 'rh_lighter_trades'],
     ['orderbook', undefined, 'orderbook'],
     ['orderbook', 'hip3', 'hip3_orderbook'],
     ['orderbook', 'lighter', 'lighter_orderbook'],
+    ['orderbook', 'rh-lighter', 'rh_lighter_orderbook'],
     ['orderbook', 'spot', 'spot_orderbook'],
     ['liquidations', undefined, 'liquidations'],
     ['liquidations', 'hip3', 'hip3_liquidations'],
@@ -114,10 +117,11 @@ describe('oxa stream channel resolution', () => {
   });
 
   it.each([
-    ['trades', 'hip4', 'hyperliquid, hip3, lighter, spot'],
-    ['orderbook', 'rh-lighter', 'hyperliquid, hip3, lighter, spot'],
-    ['orderbook', 'constructor', 'hyperliquid, hip3, lighter, spot'],
+    ['trades', 'hip4', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
+    ['orderbook', 'rh_lighter', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
+    ['orderbook', 'constructor', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
     ['liquidations', 'lighter', 'hyperliquid, hip3'],
+    ['liquidations', 'rh-lighter', 'hyperliquid, hip3'],
     ['liquidations', 'toString', 'hyperliquid, hip3'],
   ])('rejects `oxa stream %s --exchange %s` instead of streaming another venue', (verb, exchange, valid) => {
     expect(() => resolveChannel(verb, exchange)).toThrow(ProcessExit);
@@ -175,18 +179,50 @@ describe('lighter_orderbook --interval-ms', () => {
     });
   });
 
-  it.each(['orderbook', 'lighter_trades', 'lighter_funding', 'spot_orderbook'])(
+  it.each(['orderbook', 'lighter_trades', 'lighter_funding', 'spot_orderbook', 'rh_lighter_trades', 'rh_lighter_funding'])(
     'is refused on %s',
     (channel) => {
       expect(() => parseIntervalMs('250', channel)).toThrow(ProcessExit);
-      expect(stderrPayloads().at(-1)?.error).toMatch(/^--interval-ms is only supported on lighter_orderbook/);
+      expect(stderrPayloads().at(-1)?.error).toMatch(
+        /^--interval-ms is only supported on lighter_orderbook and rh_lighter_orderbook/,
+      );
     },
   );
+
+  it.each([
+    ['100', 100],
+    ['5000', 5000],
+  ])('accepts %s on rh_lighter_orderbook', (raw, expected) => {
+    expect(parseIntervalMs(raw, 'rh_lighter_orderbook')).toBe(expected);
+    expect(buildSubscribeMessage('rh_lighter_orderbook', 'AAPL-USDG', expected)).toEqual({
+      op: 'subscribe',
+      channel: 'rh_lighter_orderbook',
+      symbol: 'AAPL-USDG',
+      interval_ms: expected,
+    });
+  });
+
+  it('names the Robinhood Chain book channel in the range error', () => {
+    expect(() => parseIntervalMs('99', 'rh_lighter_orderbook')).toThrow(ProcessExit);
+    expect(stderrPayloads().at(-1)?.error).toBe(
+      '--interval-ms must be a whole number between 100 and 5000 for rh_lighter_orderbook (got 99). ' +
+        'Leave it out for one book a second.',
+    );
+  });
 });
 
 describe('Lighter drop notices', () => {
-  it('matches a drop notice on any Lighter live channel', () => {
-    for (const channel of ['lighter_orderbook', 'lighter_trades', 'lighter_open_interest', 'lighter_funding']) {
+  it('matches a drop notice on any Lighter live channel, on either deployment', () => {
+    for (const channel of [
+      'lighter_orderbook',
+      'lighter_trades',
+      'lighter_open_interest',
+      'lighter_funding',
+      'rh_lighter_orderbook',
+      'rh_lighter_trades',
+      'rh_lighter_open_interest',
+      'rh_lighter_funding',
+    ]) {
       expect(isLighterDropNotice(channel, `Dropped ~3 live ${channel} messages for BTC: ...`)).toBe(true);
     }
   });
@@ -257,7 +293,16 @@ describe('oxa stream over a WebSocket', () => {
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'lighter_trades', symbol: 'ETH' });
   });
 
-  it.each(['lighter_orderbook', 'lighter_trades', 'lighter_open_interest', 'lighter_funding'])(
+  it.each([
+    'lighter_orderbook',
+    'lighter_trades',
+    'lighter_open_interest',
+    'lighter_funding',
+    'rh_lighter_orderbook',
+    'rh_lighter_trades',
+    'rh_lighter_open_interest',
+    'rh_lighter_funding',
+  ])(
     'forwards the live Lighter channel %s through `oxa stream subscribe`',
     async (channel) => {
       await streamGenericCommand(channel.toUpperCase(), 'BTC', { format: 'json' });
@@ -379,8 +424,9 @@ describe('oxa stream over a WebSocket', () => {
   it('rejects --interval-ms on a non-Lighter orderbook before opening a socket', async () => {
     await expectValidationExit(
       () => streamOrderbookCommand('BTC', { intervalMs: '250', format: 'json' }),
-      '--interval-ms is only supported on lighter_orderbook ' +
-        '(`oxa stream orderbook <symbol> --exchange lighter` or `oxa stream subscribe lighter_orderbook <symbol>`).',
+      '--interval-ms is only supported on lighter_orderbook and rh_lighter_orderbook ' +
+        '(`oxa stream orderbook <symbol> --exchange lighter|rh-lighter` or ' +
+        '`oxa stream subscribe lighter_orderbook|rh_lighter_orderbook <symbol>`).',
     );
   });
 
@@ -429,11 +475,42 @@ describe('oxa stream over a WebSocket', () => {
     );
   });
 
-  it('does not accept rh_lighter channels as live streams', async () => {
-    await expect(
-      Promise.resolve().then(() => streamGenericCommand('rh_lighter_orderbook', 'BTC', { format: 'json' })),
-    ).rejects.toMatchObject({ code: 2 });
-    expect(stderrPayloads().at(-1)?.error).toMatch(/^Unknown stream channel "rh_lighter_orderbook"/);
-    expect(FakeWebSocket.instances).toHaveLength(0);
+  it('subscribes to rh_lighter_orderbook with interval_ms on the default endpoint', async () => {
+    await streamOrderbookCommand('AAPL-USDG', { exchange: 'rh-lighter', intervalMs: '500', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key');
+    ws.fire('open');
+    expect(ws.sent.map((frame) => JSON.parse(frame))).toEqual([
+      { op: 'subscribe', channel: 'rh_lighter_orderbook', symbol: 'AAPL-USDG', interval_ms: 500 },
+    ]);
+    const frame = { type: 'data', channel: 'rh_lighter_orderbook', coin: 'BTC', symbol: 'BTC', data: LIGHTER_BOOK };
+    ws.message(frame);
+    expect(stdoutLines()).toEqual([JSON.stringify(frame) + '\n']);
+  });
+
+  it('subscribes to rh_lighter_trades without an interval', async () => {
+    await streamTradesCommand('BTC', { exchange: 'rh-lighter', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'rh_lighter_trades', symbol: 'BTC' });
+  });
+
+  it('keeps streaming after a Robinhood Chain drop notice', async () => {
+    await streamTradesCommand('BTC', { exchange: 'rh-lighter', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message =
+      'Dropped ~4 live rh_lighter_trades messages for BTC: your connection fell behind the Lighter (Robinhood Chain) ' +
+      'stream, and those trades were not delivered.';
+    expect(() => ws.message({ type: 'error', message })).not.toThrow();
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(stderrPayloads().at(-1)).toEqual({ warning: `stream warning: ${message}`, type: 'lag' });
+  });
+
+  it('rejects live liquidations for Lighter on Robinhood Chain before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamLiquidationsCommand('BTC', { exchange: 'rh-lighter', format: 'json' }),
+      'Invalid exchange "rh-lighter" for `oxa stream liquidations`. Must be one of: hyperliquid, hip3.',
+    );
   });
 });

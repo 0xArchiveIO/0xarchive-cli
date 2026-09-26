@@ -1,6 +1,7 @@
 import {
   resolveApiKey,
   validateExchange,
+  requireExchange,
   createClient,
   getExchangeClient,
 } from '../lib/client.js';
@@ -37,6 +38,7 @@ export async function l2GetCommand(options: L2GetOptions): Promise<void> {
       EXIT.VALIDATION,
     );
   }
+  requireExchange(exchange, ['hyperliquid', 'hip3'], 'derived L2 order book');
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
 
@@ -92,6 +94,7 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
       EXIT.VALIDATION,
     );
   }
+  requireExchange(exchange, ['hyperliquid', 'hip3'], 'derived L2 history');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -176,6 +179,7 @@ export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
       EXIT.VALIDATION,
     );
   }
+  requireExchange(exchange, ['hyperliquid', 'hip3'], 'L2 diffs');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');

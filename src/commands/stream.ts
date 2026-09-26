@@ -33,10 +33,12 @@ type Channel =
   | 'trades'
   | 'hip3_trades'
   | 'lighter_trades'
+  | 'rh_lighter_trades'
   | 'spot_trades'
   | 'orderbook'
   | 'hip3_orderbook'
   | 'lighter_orderbook'
+  | 'rh_lighter_orderbook'
   | 'spot_orderbook';
 
 // Allow-listed channels for `oxa stream subscribe <channel> <symbol>`.
@@ -58,6 +60,10 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'lighter_trades',
   'lighter_open_interest',
   'lighter_funding',
+  'rh_lighter_orderbook',
+  'rh_lighter_trades',
+  'rh_lighter_open_interest',
+  'rh_lighter_funding',
   'hip3_orderbook',
   'hip3_trades',
   'hip3_candles',
@@ -70,26 +76,32 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'spot_twap',
 ]);
 
-// Lighter channels that support historical replay but not live
-// subscriptions. They are rejected before a socket is opened, with a pointer
-// to the REST command that serves the same data.
+// Lighter channels (mainnet and Robinhood Chain) that support historical
+// replay but not live subscriptions. They are rejected before a socket is
+// opened, with a pointer to the REST command that serves the same data.
 export const LIGHTER_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
   lighter_candles: 'Use `oxa candles --exchange lighter` for candle history.',
   lighter_l3_orderbook:
     'Use `oxa l3 get` for the current L3 book or `oxa l3 history` for stored snapshots.',
+  rh_lighter_candles: 'Use `oxa candles --exchange rh-lighter` for candle history.',
 };
 
-// A connection that falls behind a Lighter live channel gets a
-// "Dropped ~N live <channel> messages ..." error notice while the subscription
-// keeps running: books and stats are full states, and trades are independent
-// rows, so the stream stays usable. The CLI reports these as warnings and
-// keeps streaming. The server's "Stopped the <channel> stream ..." notice ends
-// the subscription and, like every other server error, still exits.
+// A connection that falls behind a Lighter live channel (either deployment)
+// gets a "Dropped ~N live <channel> messages ..." error notice while the
+// subscription keeps running: books and stats are full states, and trades are
+// independent rows, so the stream stays usable. The CLI reports these as
+// warnings and keeps streaming. The server's "Stopped the <channel> stream ..."
+// notice ends the subscription and, like every other server error, still exits.
 export function isLighterDropNotice(channel: string, message: string): boolean {
-  return channel.startsWith('lighter_') && message.startsWith('Dropped ~');
+  return (
+    (channel.startsWith('lighter_') || channel.startsWith('rh_lighter_')) &&
+    message.startsWith('Dropped ~')
+  );
 }
 
-// lighter_orderbook sends the newest full book at most once per interval.
+// The Lighter book channels send the newest full book at most once per
+// interval, set with --interval-ms. No other channel takes an interval.
+export const LIGHTER_BOOK_CHANNELS: readonly string[] = ['lighter_orderbook', 'rh_lighter_orderbook'];
 export const LIGHTER_BOOK_INTERVAL_MIN_MS = 100;
 export const LIGHTER_BOOK_INTERVAL_MAX_MS = 5000;
 
@@ -104,12 +116,14 @@ const VERB_CHANNELS: Readonly<Record<string, Readonly<Record<string, Channel>>>>
     hyperliquid: 'trades',
     hip3: 'hip3_trades',
     lighter: 'lighter_trades',
+    'rh-lighter': 'rh_lighter_trades',
     spot: 'spot_trades',
   },
   orderbook: {
     hyperliquid: 'orderbook',
     hip3: 'hip3_orderbook',
     lighter: 'lighter_orderbook',
+    'rh-lighter': 'rh_lighter_orderbook',
     spot: 'spot_orderbook',
   },
 };
@@ -140,15 +154,17 @@ function parseDuration(raw?: string): number | undefined {
 }
 
 /**
- * Validate `--interval-ms` for the resolved channel. Only lighter_orderbook
- * takes an interval; the server applies the same bounds.
+ * Validate `--interval-ms` for the resolved channel. Only the Lighter book
+ * channels (lighter_orderbook, rh_lighter_orderbook) take an interval; the
+ * server applies the same bounds.
  */
 export function parseIntervalMs(raw: string | undefined, channel: string): number | undefined {
   if (raw === undefined) return undefined;
-  if (channel !== 'lighter_orderbook') {
+  if (!LIGHTER_BOOK_CHANNELS.includes(channel)) {
     exitError(
-      '--interval-ms is only supported on lighter_orderbook ' +
-        '(`oxa stream orderbook <symbol> --exchange lighter` or `oxa stream subscribe lighter_orderbook <symbol>`).',
+      '--interval-ms is only supported on lighter_orderbook and rh_lighter_orderbook ' +
+        '(`oxa stream orderbook <symbol> --exchange lighter|rh-lighter` or ' +
+        '`oxa stream subscribe lighter_orderbook|rh_lighter_orderbook <symbol>`).',
       EXIT.VALIDATION,
     );
   }
@@ -161,7 +177,7 @@ export function parseIntervalMs(raw: string | undefined, channel: string): numbe
   ) {
     exitError(
       `--interval-ms must be a whole number between ${LIGHTER_BOOK_INTERVAL_MIN_MS} and ` +
-        `${LIGHTER_BOOK_INTERVAL_MAX_MS} for lighter_orderbook (got ${raw}). Leave it out for one book a second.`,
+        `${LIGHTER_BOOK_INTERVAL_MAX_MS} for ${channel} (got ${raw}). Leave it out for one book a second.`,
       EXIT.VALIDATION,
     );
   }

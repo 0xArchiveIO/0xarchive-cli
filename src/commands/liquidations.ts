@@ -3,6 +3,9 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  isLighterExchange,
+  sdkTooOld,
+  type Exchange,
 } from '../lib/client.js';
 import {
   outputJson,
@@ -55,22 +58,36 @@ interface LiquidationsUserOptions {
   format: string;
 }
 
-const LIQUIDATION_EXCHANGES = ['hyperliquid', 'hip3'];
+// Liquidation history and volume: Hyperliquid, HIP-3, and both Lighter
+// deployments. Lookup by user is Hyperliquid only.
+export const LIQUIDATION_EXCHANGES = ['hyperliquid', 'hip3', 'lighter', 'rh-lighter'] as const;
 
-function validateLiquidationExchange(exchange: string): string {
+export function validateLiquidationExchange(exchange: Exchange): void {
   if (exchange === 'hip4') {
     exitError(
-      'HIP-4 has no liquidations endpoint. Use --exchange hyperliquid or hip3.',
+      'HIP-4 has no liquidations endpoint. Use --exchange hyperliquid, hip3, lighter, or rh-lighter.',
       EXIT.VALIDATION,
     );
   }
-  if (!LIQUIDATION_EXCHANGES.includes(exchange)) {
+  if (!(LIQUIDATION_EXCHANGES as readonly string[]).includes(exchange)) {
     exitError(
-      `Liquidations are only available for hyperliquid and hip3. Got "${exchange}".`,
+      `Liquidations are available for ${LIQUIDATION_EXCHANGES.join(', ')}. Got "${exchange}".`,
       EXIT.VALIDATION,
     );
   }
-  return exchange;
+}
+
+// The liquidations resource on the chosen exchange client. Both Lighter
+// clients gained it in the SDK floor release.
+function liquidationsResource(client: ReturnType<typeof createClient>, exchange: Exchange): any {
+  const resource = (getExchangeClient(client, exchange) as any).liquidations;
+  if (!resource) sdkTooOld(`Lighter liquidations (--exchange ${exchange})`);
+  return resource;
+}
+
+function isoTime(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
+  return value === undefined || value === null ? '-' : String(value);
 }
 
 export async function liquidationsCommand(options: LiquidationsOptions): Promise<void> {
@@ -99,9 +116,7 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
-    const hlClient = exchangeClient as any;
-    const result = await hlClient.liquidations.history(options.symbol, {
+    const result = await liquidationsResource(client, exchange).history(options.symbol, {
       start,
       end,
       limit,
@@ -117,14 +132,27 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
         prettyDim('No liquidations found.');
       } else {
         const preview = liqs.slice(0, 20);
-        const rows = preview.map((l: any) => [
-          l.timestamp,
-          l.side === 'B' ? 'LONG' : 'SHORT',
-          l.price,
-          l.size,
-          l.liquidatedUser?.slice(0, 10) + '...' || '—',
-        ]);
-        prettyTable(['Timestamp', 'Side', 'Price', 'Size', 'User'], rows);
+        if (isLighterExchange(exchange)) {
+          // Lighter rows carry the liquidation type and USD amount; the
+          // liquidated side is not flagged on the trade.
+          const rows = preview.map((l: any) => [
+            isoTime(l.timestamp),
+            String(l.liquidationType ?? l.liquidation_type ?? '-'),
+            String(l.price ?? '-'),
+            String(l.size ?? '-'),
+            String(l.usdAmount ?? l.usd_amount ?? '-'),
+          ]);
+          prettyTable(['Timestamp', 'Type', 'Price', 'Size', 'USD'], rows);
+        } else {
+          const rows = preview.map((l: any) => [
+            l.timestamp,
+            l.side === 'B' ? 'LONG' : 'SHORT',
+            l.price,
+            l.size,
+            l.liquidatedUser ? l.liquidatedUser.slice(0, 10) + '...' : '-',
+          ]);
+          prettyTable(['Timestamp', 'Side', 'Price', 'Size', 'User'], rows);
+        }
 
         if (liqs.length > 20) {
           prettyDim(`... and ${liqs.length - 20} more`);
@@ -160,9 +188,7 @@ export async function liquidationsVolumeCommand(options: LiquidationsVolumeOptio
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange);
-    const hlClient = exchangeClient as any;
-    const result = await hlClient.liquidations.volume(options.symbol, {
+    const result = await liquidationsResource(client, exchange).volume(options.symbol, {
       start,
       end,
       interval: options.interval,
@@ -183,13 +209,23 @@ export async function liquidationsVolumeCommand(options: LiquidationsVolumeOptio
         prettyDim('No volume data found.');
       } else {
         const preview = buckets.slice(0, 20);
-        const rows = preview.map((b: any) => [
-          b.timestamp,
-          `$${b.totalUsd}`,
-          `$${b.longUsd}`,
-          `$${b.shortUsd}`,
-        ]);
-        prettyTable(['Timestamp', 'Total USD', 'Long USD', 'Short USD'], rows);
+        if (isLighterExchange(exchange)) {
+          // Lighter buckets carry the total and a count, with no long/short split.
+          const rows = preview.map((b: any) => [
+            isoTime(b.timestamp),
+            `$${b.totalUsd ?? b.total_usd}`,
+            String(b.count ?? '-'),
+          ]);
+          prettyTable(['Timestamp', 'Total USD', 'Count'], rows);
+        } else {
+          const rows = preview.map((b: any) => [
+            b.timestamp,
+            `$${b.totalUsd}`,
+            `$${b.longUsd}`,
+            `$${b.shortUsd}`,
+          ]);
+          prettyTable(['Timestamp', 'Total USD', 'Long USD', 'Short USD'], rows);
+        }
 
         if (buckets.length > 20) {
           prettyDim(`... and ${buckets.length - 20} more`);
@@ -224,7 +260,7 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
 
   if (exchange !== 'hyperliquid') {
     exitError(
-      'Liquidations by user is currently only available for hyperliquid.',
+      'Liquidations by user is only available for --exchange hyperliquid.',
       EXIT.VALIDATION,
     );
   }
