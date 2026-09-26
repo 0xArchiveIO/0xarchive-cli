@@ -26,6 +26,7 @@ const sdk = vi.hoisted(() => {
     hyperliquid: {
       positions: positionsResource(),
       liquidations: { history: vi.fn(), volume: vi.fn(), byUser: vi.fn() },
+      trades: { list: vi.fn(), recent: vi.fn() },
       hip3: { positions: positionsResource() },
     },
     lighter: { ...lighterVenue(), accounts: { byL1: vi.fn() } } as Record<string, any>,
@@ -656,6 +657,24 @@ describe('Lighter deployments on the shared verbs', () => {
       nextCursor: null,
       meta: { finalizedThrough: '2026-09-25T00:00:00Z', clampedTo: '2026-09-25T00:00:00Z' },
     });
+  });
+
+  it('keeps Hyperliquid ranged trades output unchanged: no meta passthrough', async () => {
+    const trades = sdk.state.clients.hyperliquid.trades;
+    trades.list.mockResolvedValue({
+      data: [],
+      nextCursor: 'c1',
+      meta: { count: 0, requestId: 'r1', nextCursor: 'c1' },
+    });
+
+    await tradesFetchCommand({ exchange: 'hyperliquid', symbol: 'BTC', start: START, end: END, format: 'json' });
+    expect(trades.list).toHaveBeenCalledWith('BTC', {
+      start: Date.parse(START),
+      end: Date.parse(END),
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'c1' });
   });
 
   it.each([

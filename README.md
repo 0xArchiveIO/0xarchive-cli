@@ -81,7 +81,7 @@ oxa stream orderbook BTC --exchange lighter --duration-ms 10000
 | --- | --- | --- |
 | Hyperliquid | `--exchange hyperliquid` | `BTC`, `ETH`, `SOL`, etc. |
 | Lighter (mainnet) | `--exchange lighter` | `BTC`, `ETH`, etc. |
-| Lighter on Robinhood Chain | `--exchange rh-lighter` | USDG-quoted. Perps are uppercase (`BTC`, `ETH`); spot markets are dashed (`AAPL-USDG`). 84 markets: 57 perp, 27 spot. Trades and liquidations from 2026-06-26 20:10:26 UTC (venue launch); order book, OI, and funding from 2026-08-22 18:43 UTC; candles from 2026-06-26 once they are enabled for this deployment. No L3. |
+| Lighter on Robinhood Chain | `--exchange rh-lighter` | USDG-quoted. Perps are uppercase (`BTC`, `ETH`); spot markets are dashed (`AAPL-USDG`). 84 markets: 57 perp, 27 spot. Trades from 2026-06-26 20:10:26 UTC (venue launch); liquidations, order book, OI, and funding from 2026-08-22 18:43 UTC; candles from 2026-06-26 once they are enabled for this deployment. No L3. |
 | Hyperliquid HIP-3 | `--exchange hip3` | `km:US500`, `xyz:XYZ100`, etc. Case-sensitive. |
 | Hyperliquid HIP-4 | `--exchange hip4` or `oxa hip4 ...` | Bare numerics: `0`, `1`, `42`. Legacy `#0` / `%230` forms still work. `mark_price` is implied probability (0..1), not USD. Per-side OI is available from 2026-05-02 at ~10s cadence; candles are available. No funding or liquidations. |
 | Hyperliquid Spot | `oxa spot ...` | Dashed canonical: `HYPE-USDC`, `PURR-USDC`. 326 pairs. Spot candles from 2025-03-22T10:50:22Z at `1m`/`5m`/`15m`/`30m`/`1h`/`4h`/`1d`/`1w`, max 1000 rows; trades from 2025-03-22; orderbook, L4, TWAP live from 2026-05-05. No funding, OI, or liquidations. |
@@ -256,7 +256,7 @@ oxa instruments --exchange <exchange> [--format <format>]
 
 ### `oxa liquidations history`
 
-Get liquidation history for Hyperliquid, HIP-3, and both Lighter deployments. Lighter mainnet liquidations are served from 2026-06-10 and Lighter on Robinhood Chain liquidations from 2026-06-26 20:10:26 UTC.
+Get liquidation history for Hyperliquid, HIP-3, and both Lighter deployments. Lighter mainnet liquidations are served from 2026-06-10 and Lighter on Robinhood Chain liquidations from 2026-08-22 18:43 UTC.
 
 ```bash
 oxa liquidations history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -387,8 +387,8 @@ oxa positions account-history --exchange hyperliquid --address 0xYourWallet --st
 |---|---|---|
 | `oxa positions get` | all four | Open positions and the account summary, at the latest snapshot or as of `--timestamp`. Filters: `--symbol`, `--dex` (HIP-3). |
 | `oxa positions history` | all four | Hourly position snapshots in `[--start, --end)`. Filters: `--symbol`, `--dex` (HIP-3); `--limit`, `--cursor`. |
-| `oxa positions changes` | all four | Change log: every fill that changed a position, with the position before and after, the entry price after, realized PnL, and fees, in `[--start, --end)`. |
-| `oxa positions market` | all four | Every open position in one `--symbol`, sorted by position value, at the latest snapshot or at `--hour`. Filters: `--side long|short`, `--min-value <usd>`, `--include-system` (Lighter). |
+| `oxa positions changes` | all four | Change log: every fill leg on the position, with the size before and after, the entry price after, realized PnL, and fees, in `[--start, --end)`. On Lighter, a leg that leaves the size unchanged is included too, with `eventType` `settlement` (the settled side of a market settlement) or `unchanged`. |
+| `oxa positions market` | all four | Every open position in one `--symbol`, sorted by position value, at the latest snapshot or at `--hour`. Filters: `--side long` or `--side short`, `--min-value <usd>`, `--include-system` (Lighter). |
 | `oxa positions summary` | all four | Long and short counts, sizes, values, average entries, and top-10 share for one `--symbol`: the latest snapshot, or hourly over `--start`/`--end`. |
 | `oxa positions all` | all four | Every open position across markets at one `--hour` (an exact UTC hour). |
 | `oxa positions account` | `hyperliquid`, `hip3` | Account value, margin, position value, and PnL for one wallet (`--dex` on HIP-3). |

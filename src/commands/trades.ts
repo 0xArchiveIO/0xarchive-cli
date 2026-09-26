@@ -3,6 +3,7 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  isLighterExchange,
   type Exchange,
 } from '../lib/client.js';
 import {
@@ -92,9 +93,10 @@ async function fetchRange(
     const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.trades.list(symbol, { start, end, limit, cursor });
     const trades = result.data;
-    // Lighter ranges are clamped to the finalization watermark; the SDK
-    // surfaces that as meta (finalized_through, clamped_to), passed through.
-    const meta = responseMeta(result);
+    // Lighter ranges (both deployments) are clamped to the finalization
+    // watermark; the SDK surfaces that as meta (finalized_through,
+    // clamped_to), passed through. Other exchanges keep their output as is.
+    const meta = isLighterExchange(exchange) ? responseMeta(result) : undefined;
     const envelope = { data: trades, nextCursor: result.nextCursor ?? null, ...(meta ? { meta } : {}) };
 
     if (outPath) {

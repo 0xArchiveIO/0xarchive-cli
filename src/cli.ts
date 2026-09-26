@@ -988,7 +988,7 @@ positions
 
 positions
   .command('changes')
-  .description('Get the position change log (every fill that changed a position) for a wallet or account')
+  .description('Get the position change log (every fill leg on the position, including legs that leave the size unchanged) for a wallet or account')
   .requiredOption('--exchange <exchange>', POSITIONS_EXCHANGE_DESC)
   .option('--address <address>', 'Wallet address, 0x... (hyperliquid, hip3)')
   .option('--account <index>', 'Lighter account index (lighter, rh-lighter)')
