@@ -155,6 +155,7 @@ export async function hip4OrdersFlow(
     end: string;
     interval?: string;
     limit?: string;
+    cursor?: string;
     out?: string;
   },
 ): Promise<void> {

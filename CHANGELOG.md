@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`. The API now pages order flow: a page holds the oldest `--limit` buckets of the window, and `nextCursor` is set while more may follow. Run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval` until it is `null`. With `--out`, the summary now reports `has_more` and `nextCursor`, as `oxa orders history` does.
+
 ### Changed
 
 - `--interval 1m` works on `oxa funding history`, `oxa oi history`, `oxa prices`, `oxa liquidations volume`, and the HIP-4 open interest and price commands. The API now serves 1-minute buckets on those routes. Funding, open interest, and prices used to refuse `1m` before sending the request.
