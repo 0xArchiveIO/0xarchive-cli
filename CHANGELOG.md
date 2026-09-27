@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`: a resume point in Unix ms, and the API starts the response at the first bucket that opens after it. The API does not return `nextCursor` on order flow yet: it arrives with an API switch, and until then `nextCursor` in the order-flow output is `null`.
+
+### Changed
+
+- `--interval 1m` works on `oxa funding history`, `oxa oi history`, `oxa prices`, `oxa liquidations volume`, and the HIP-4 open interest and price commands. The API now serves 1-minute buckets on those routes. Funding, open interest, and prices used to refuse `1m` before sending the request.
+- `oxa orders flow` and `oxa hip4 orders flow` describe `--interval` as the bucket widths the API serves: `1m`, `5m`, `15m`, `1h` (default `1h`). The help used to list `30m`, `4h`, and `1d`, which the API refuses.
+
 ## 1.9.0 - 2026-09-25
 
 ### Added

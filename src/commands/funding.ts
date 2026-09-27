@@ -16,7 +16,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, validateInterval } from '../lib/time.js';
+import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface FundingCurrentOptions {
   exchange: string;
@@ -97,7 +97,7 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
       end,
       limit,
       cursor: options.cursor,
-      interval,
+      interval: toSdkInterval(interval),
     });
     const rates = result.data;
     const envelope = { data: rates, nextCursor: result.nextCursor ?? null };

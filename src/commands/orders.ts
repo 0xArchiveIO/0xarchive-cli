@@ -120,6 +120,7 @@ interface OrdersFlowOptions {
   end: string;
   interval?: string;
   limit?: string;
+  cursor?: string;
   out?: string;
   apiKey?: string;
   format: string;
@@ -144,6 +145,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.interval) sdkParams.interval = options.interval;
+    if (options.cursor) sdkParams.cursor = options.cursor;
 
     const result = await (exchangeClient as any).orders.flow(options.symbol, sdkParams);
     const data = result.data;
