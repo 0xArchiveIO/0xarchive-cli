@@ -15,7 +15,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, validateInterval } from '../lib/time.js';
+import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface OICurrentOptions {
   exchange: string;
@@ -96,7 +96,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
       end,
       limit,
       cursor: options.cursor,
-      interval,
+      interval: toSdkInterval(interval),
     });
     const records = result.data;
     const envelope = { data: records, nextCursor: result.nextCursor ?? null };
