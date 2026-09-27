@@ -403,12 +403,12 @@ oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
 | `--interval` | No | Bucket width: `1m`, `5m`, `15m`, `1h` (default) |
-| `--limit` | No | Maximum number of buckets, oldest first (default 1000, max 10000) |
-| `--cursor` | No | Resume point in Unix ms: the response starts at the first bucket that opens after it |
+| `--limit` | No | Buckets per page (default 1000, max 10000) |
+| `--cursor` | No | Pagination cursor (`nextCursor` from the previous response) |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
-Buckets are labelled by their open time in UTC, and buckets with no events are omitted.
+A page holds the oldest `--limit` buckets of the window. While the response carries `nextCursor`, run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval`; stop when it is `null`. Buckets are labelled by their open time in UTC, and buckets with no events are omitted.
 
 ### `oxa orders tpsl`
 
