@@ -4,7 +4,7 @@
 
 ### Added
 
-- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`. The API now pages order flow: a page holds the oldest `--limit` buckets of the window, and `nextCursor` is set while more may follow. Run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval` until it is `null`. With `--out`, the summary now reports `has_more` and `nextCursor`, as `oxa orders history` does.
+- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`: a resume point in Unix ms, and the API starts the response at the first bucket that opens after it. The API does not return `nextCursor` on order flow yet: it arrives with an API switch, and until then `nextCursor` in the order-flow output is `null`.
 
 ### Changed
 
