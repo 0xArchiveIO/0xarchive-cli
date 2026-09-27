@@ -120,6 +120,7 @@ interface OrdersFlowOptions {
   end: string;
   interval?: string;
   limit?: string;
+  cursor?: string;
   out?: string;
   apiKey?: string;
   format: string;
@@ -144,6 +145,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.interval) sdkParams.interval = options.interval;
+    if (options.cursor) sdkParams.cursor = options.cursor;
 
     const result = await (exchangeClient as any).orders.flow(options.symbol, sdkParams);
     const data = result.data;
@@ -156,11 +158,14 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         records: data.length,
         exchange,
         symbol: options.symbol,
+        has_more: !!result.nextCursor,
+        nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} Order Flow (${exchange})`);
         prettyField('Records', data.length);
         prettyField('Written to', options.out);
+        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -171,6 +176,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         prettyDim('No order flow data found.');
       } else {
         outputJson(envelope);
+        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
       }
       process.stdout.write('\n');
     } else {
