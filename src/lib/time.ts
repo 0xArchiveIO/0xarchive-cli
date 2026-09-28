@@ -1,3 +1,4 @@
+import type { OiFundingInterval } from '@0xarchive/sdk';
 import { exitError, EXIT } from './output.js';
 
 /**
@@ -46,7 +47,7 @@ export function parsePositiveInt(value: string | undefined, label: string): numb
   return n;
 }
 
-const VALID_INTERVALS = ['5m', '15m', '30m', '1h', '4h', '1d'] as const;
+const VALID_INTERVALS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'] as const;
 const VALID_CANDLE_INTERVALS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] as const;
 
 export type Interval = (typeof VALID_INTERVALS)[number];
@@ -64,6 +65,16 @@ export function validateInterval(value: string | undefined): Interval | undefine
     );
   }
   return value as Interval;
+}
+
+/**
+ * An interval from validateInterval(), typed for the SDK. Published SDK
+ * releases leave '1m' out of OiFundingInterval, but the SDK sends the value
+ * unchanged and the API accepts it. Drop this once the dependency is on an
+ * SDK release whose OiFundingInterval includes '1m'.
+ */
+export function toSdkInterval(value: Interval | undefined): OiFundingInterval | undefined {
+  return value as OiFundingInterval | undefined;
 }
 
 /**

@@ -212,7 +212,7 @@ oxa funding history --exchange <exchange> --symbol <symbol> --start <time> --end
 | `--symbol` | Yes | Coin symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--interval` | No | Aggregation: `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
+| `--interval` | No | Aggregation: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--format` | No | `json` (default) or `pretty` |
@@ -241,7 +241,7 @@ oxa oi history --exchange <exchange> --symbol <symbol> --start <time> --end <tim
 | `--symbol` | Yes | Coin symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--interval` | No | Aggregation: `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
+| `--interval` | No | Aggregation: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--format` | No | `json` (default) or `pretty` |
@@ -288,7 +288,7 @@ oxa liquidations volume --exchange <exchange> --symbol <symbol> --start <time> -
 | `--symbol` | Yes | Coin symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--interval` | No | Aggregation: `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
+| `--interval` | No | Aggregation: `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--out` | No | Write JSON output to file |
@@ -336,7 +336,7 @@ oxa prices --exchange <exchange> --symbol <symbol> --start <time> --end <time> [
 | `--symbol` | Yes | Coin symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--interval` | No | Aggregation: `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
+| `--interval` | No | Aggregation: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--format` | No | `json` (default) or `pretty` |
@@ -487,10 +487,13 @@ oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 | `--symbol` | Yes | Trading symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--interval` | No | Aggregation interval: `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
-| `--limit` | No | Maximum records to return |
+| `--interval` | No | Bucket width: `1m`, `5m`, `15m`, `1h` (default) |
+| `--limit` | No | Maximum number of buckets, oldest first (default 1000, max 10000) |
+| `--cursor` | No | Resume point in Unix ms: the response starts at the first bucket that opens after it |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
+
+Buckets are labelled by their open time in UTC, and buckets with no events are omitted.
 
 ### `oxa orders tpsl`
 

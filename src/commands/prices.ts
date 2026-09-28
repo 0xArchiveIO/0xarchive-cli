@@ -14,7 +14,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, validateInterval } from '../lib/time.js';
+import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface PricesOptions {
   exchange: string;
@@ -60,7 +60,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
       end,
       limit,
       cursor: options.cursor,
-      interval,
+      interval: toSdkInterval(interval),
     });
     const prices = result.data;
     const envelope = { data: prices, nextCursor: result.nextCursor ?? null };
