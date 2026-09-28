@@ -3,6 +3,7 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  isLighterExchange,
 } from '../lib/client.js';
 import {
   outputJson,
@@ -35,7 +36,7 @@ export async function instrumentsCommand(options: InstrumentsOptions): Promise<v
 
       if (instruments.length === 0) {
         prettyDim('No instruments found.');
-      } else if (exchange === 'lighter') {
+      } else if (isLighterExchange(exchange)) {
         const rows = instruments.map((i: any) => [
           i.symbol ?? i.name ?? '—',
           i.marketType ?? '—',
