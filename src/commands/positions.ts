@@ -537,6 +537,14 @@ export async function positionsSummaryCommand(options: PositionsSummaryOptions):
     );
   }
   const range = options.start !== undefined ? parseRange(options.start, options.end!) : undefined;
+  if (options.cursor !== undefined && range === undefined) {
+    // Only an hourly series pages, and its cursor is bound to the window it
+    // was issued for.
+    exitError(
+      '--cursor pages an hourly series: pass the same --start and --end as the first page.',
+      EXIT.VALIDATION,
+    );
+  }
   const includeSystem = parseIncludeSystem(exchange, options.includeSystem);
   const limit = parseLimit(options.limit);
   const apiKey = resolveApiKey(options.apiKey);

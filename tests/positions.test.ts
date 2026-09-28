@@ -514,6 +514,13 @@ describe('oxa positions', () => {
         'Pass both --start and --end for an hourly series, or neither for the latest snapshot.',
       ));
 
+    it('pages a summary only as an hourly series', () =>
+      expectExit(
+        () => positionsSummaryCommand({ exchange: 'rh-lighter', symbol: 'BTC', cursor: 'p2', format: 'json' }),
+        2,
+        '--cursor pages an hourly series: pass the same --start and --end as the first page.',
+      ));
+
     it('keeps account summaries to Hyperliquid and HIP-3', () =>
       expectExit(
         () => accountGetCommand({ exchange: 'rh-lighter', address: WALLET, format: 'json' }),

@@ -1033,7 +1033,7 @@ positions
   .option('--end <time>', 'End of an hourly series (ISO 8601 or Unix ms); pass with --start')
   .option('--include-system', 'Lighter only: include settlement, insurance, and other system accounts')
   .option('--limit <n>', 'Maximum hourly points to return')
-  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (hourly series; repeat the same --start and --end)')
   .option('--out <path>', 'Write JSON output to file')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')

@@ -2,9 +2,9 @@
 
 Terminal-first access to 0xArchive market data.
 
-0xArchive is granular market data infrastructure for two venues: Hyperliquid and Lighter. Lighter has two deployments: mainnet and Robinhood Chain. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets. Lighter mainnet is `--exchange lighter` and Lighter on Robinhood Chain is `--exchange rh-lighter`.
+0xArchive is granular market data infrastructure for two venues: Hyperliquid and Lighter. Lighter has two deployments: mainnet and Robinhood Chain. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets. Lighter mainnet is `--exchange lighter` and Lighter on Robinhood Chain is `--exchange rh-lighter`. Account positions (`oxa positions ...`) cover Hyperliquid, HIP-3, and both Lighter deployments.
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, account positions, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
 
 ## Install
 
@@ -385,7 +385,7 @@ oxa positions account-history --exchange hyperliquid --address 0xYourWallet --st
 
 | Subcommand | Venues | Description |
 |---|---|---|
-| `oxa positions get` | all four | Open positions and the account summary, at the latest snapshot or as of `--timestamp`. Filters: `--symbol`, `--dex` (HIP-3). |
+| `oxa positions get` | all four | Open positions at the latest snapshot or as of `--timestamp`, plus the account summary on the first page of a snapshot read: on Hyperliquid always, on HIP-3 with `--dex` (or a dex-prefixed `--symbol`), and on Lighter the account's position totals when no `--symbol` is set. Filters: `--symbol`, `--dex` (HIP-3). |
 | `oxa positions history` | all four | Hourly position snapshots in `[--start, --end)`. Filters: `--symbol`, `--dex` (HIP-3); `--limit`, `--cursor`. |
 | `oxa positions changes` | all four | Change log: every fill leg on the position, with the size before and after, the entry price after, realized PnL, and fees, in `[--start, --end)`. On Lighter, a leg that leaves the size unchanged is included too, with `eventType` `settlement` (the settled side of a market settlement) or `unchanged`. |
 | `oxa positions market` | all four | Every open position in one `--symbol`, sorted by position value, at the latest snapshot or at `--hour`. Filters: `--side long` or `--side short`, `--min-value <usd>`, `--include-system` (Lighter). |
@@ -405,9 +405,11 @@ Coverage:
 
 How to read the results:
 
-- The JSON output is `{ "data": ..., "nextCursor": ..., "meta": ... }`. `meta` states what the page describes: `asOf`, `snapshotTs`, `source` (`snapshot` for hourly and live snapshots, `reconstructed` for an as-of time between snapshots, `changes` for the change log), `quality`, `stale`, `builtThrough`, `finalizedThrough`, `totals` (market listings, first page only), and `notice` / `coverageFrom` when a request reaches outside coverage.
-- `--timestamp` on `oxa positions get` returns the committed snapshot when it names a snapshot hour, and otherwise a reconstruction: size, entry, and open time are exact, mark fields are taken at that time, and snapshot-only fields are null. A time later than `meta.builtThrough` is clamped to it (`meta.clampedTo`).
-- Every row carries its own `quality`, and `meta.quality` is the snapshot's. `meta.stale` is `true`, with a notice, when the latest snapshot is more than 12 minutes old.
+- The JSON output is `{ "data": ..., "nextCursor": ..., "meta": ... }`. `meta` states what the page describes: `asOf`, `snapshotTs`, `source` (`snapshot` for hourly and live snapshots, `reconstructed` for an as-of time between snapshots, `changes` for the change log), `quality`, `stale`, `builtThrough`, `finalizedThrough`, `requestedEnd` / `clampedTo` when a read was clamped, `totals` (market listings, first page only), and `notice` / `coverageFrom` when a request reaches before coverage. Before coverage the command still succeeds, with an empty list and the notice.
+- `--timestamp` on `oxa positions get` returns the committed snapshot when it names a snapshot hour, and otherwise a reconstruction: size, entry, and open time are exact, mark fields are taken at that time, and snapshot-only fields are null. A `--timestamp`, or a change-log `--end`, later than `meta.builtThrough` is clamped to it (`meta.requestedEnd`, `meta.clampedTo`).
+- Every row carries its own `quality` (`complete`, `partial`, or `degraded`; Lighter rows can also read `preliminary`, `unreconciled`, or `incomplete`), and `meta.quality` is the snapshot's. A `partial` row is missing some fields, such as the mark, the entry, or the leverage, which read null or `unknown`. `meta.stale` is `true`, with a notice, when the latest snapshot is more than 12 minutes old.
+- Hyperliquid and HIP-3 snapshots normally read `complete`; hourly snapshots before 2026-09-26 19:00 UTC can read `degraded` on every row.
+- On both Lighter deployments, a snapshot of the most recent, not yet reconciled day can read `degraded` in `meta.quality` while its rows read `preliminary`. Those rows read `complete` once the venue's daily reconcile has covered them, which `meta.finalizedThrough` tracks.
 - `data.accountSeen` on `oxa positions get` is `flat`, `never_seen`, or `outside_coverage`. `never_seen` means no recorded activity in the covered history, not proof that the account never traded.
 - `meta.finalizedThrough` means what it means on Lighter trades: nothing before it will be re-derived. Rows after it can still change.
 - Lighter settlement, insurance, and other system accounts are left out of `oxa positions market` and `oxa positions all` unless you pass `--include-system`, and are labelled by `accountKind` everywhere.
