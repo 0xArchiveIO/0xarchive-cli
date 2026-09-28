@@ -170,7 +170,7 @@ describe('HIP-4 candle coverage', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     expect(() => rejectHip4('hip4', 'funding')).toThrow('process.exit unexpectedly called');
     expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Use --exchange hyperliquid or hip3.'),
+      expect.stringContaining('Use --exchange hyperliquid, hip3, lighter, or rh-lighter.'),
     );
   });
 
@@ -179,7 +179,7 @@ describe('HIP-4 candle coverage', () => {
       new URL('../src/commands/liquidations.ts', import.meta.url),
       'utf8',
     );
-    expect(source).toContain('Use --exchange hyperliquid or hip3.');
+    expect(source).toContain('Use --exchange hyperliquid, hip3, lighter, or rh-lighter.');
     expect(source).not.toContain('Use --exchange hl or hip3.');
   });
 

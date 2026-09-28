@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # The CLI depends on the @0xarchive/sdk release named in package.json. A
+      # CLI release can land in this repo before that SDK version reaches npm.
+      # In that window this step installs the newest published SDK for this run
+      # only and restores package.json afterwards. The CLI type-checks against
+      # either (it reads the newer SDK resources through its own interfaces),
+      # and the tests stub the SDK surface these commands call. Once the floor
+      # version is on npm, the first branch runs and nothing is substituted.
+      - name: Install dependencies
+        run: |
+          floor="$(node -p "require('./package.json').dependencies['@0xarchive/sdk']")"
+          if npm view "@0xarchive/sdk@${floor}" version > /dev/null 2>&1; then
+            npm install --no-audit --no-fund
+          else
+            latest="$(npm view @0xarchive/sdk version)"
+            echo "::warning::@0xarchive/sdk ${floor} is not published yet; installing ${latest} for this run only."
+            npm pkg set "dependencies.@0xarchive/sdk=${latest}"
+            npm install --no-audit --no-fund
+            git checkout -- package.json
+          fi
+          npm ls @0xarchive/sdk || true
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package contents
+        run: npm run check:pack

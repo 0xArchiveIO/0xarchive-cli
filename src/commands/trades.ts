@@ -3,6 +3,7 @@ import {
   validateExchange,
   createClient,
   getExchangeClient,
+  isLighterExchange,
   type Exchange,
 } from '../lib/client.js';
 import {
@@ -59,7 +60,8 @@ export async function tradesFetchCommand(options: TradesFetchOptions): Promise<v
       );
     }
 
-    // Lighter/HIP-3: use recent trades
+    // Lighter (both deployments) and HIP-3: the recent tier. On Lighter it is
+    // preliminary until the finalization watermark passes it.
     return fetchRecent(exchange, options.symbol, limit, apiKey, format, options.out);
   }
 
@@ -91,7 +93,11 @@ async function fetchRange(
     const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const result = await exchangeClient.trades.list(symbol, { start, end, limit, cursor });
     const trades = result.data;
-    const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
+    // Lighter ranges (both deployments) are clamped to the finalization
+    // watermark; the SDK surfaces that as meta (finalized_through,
+    // clamped_to), passed through. Other exchanges keep their output as is.
+    const meta = isLighterExchange(exchange) ? responseMeta(result) : undefined;
+    const envelope = { data: trades, nextCursor: result.nextCursor ?? null, ...(meta ? { meta } : {}) };
 
     if (outPath) {
       writeOutputFile(outPath, trades);
@@ -102,6 +108,7 @@ async function fetchRange(
         symbol,
         has_more: !!result.nextCursor,
         nextCursor: result.nextCursor ?? null,
+        ...(meta ? { meta } : {}),
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Trades (${exchange})`);
@@ -113,7 +120,7 @@ async function fetchRange(
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyPrintTrades(trades, symbol, exchange, result.nextCursor);
+      prettyPrintTrades(trades, symbol, exchange, result.nextCursor, meta);
     } else {
       outputJson(envelope);
     }
@@ -172,8 +179,13 @@ function prettyPrintTrades(
   symbol: string,
   exchange: string,
   nextCursor?: string,
+  meta?: Record<string, unknown>,
 ): void {
   prettyHeader(`${symbol} Trades (${exchange}) — ${trades.length} records`);
+  if (meta) {
+    prettyField('Finalized through', metaString(meta, 'finalizedThrough', 'finalized_through'));
+    prettyField('Clamped to', metaString(meta, 'clampedTo', 'clamped_to'));
+  }
 
   if (trades.length === 0) {
     prettyDim('No trades found.');
@@ -197,4 +209,17 @@ function prettyPrintTrades(
     prettyDim('More data available (use --cursor to paginate)');
   }
   process.stdout.write('\n');
+}
+
+function responseMeta(result: unknown): Record<string, unknown> | undefined {
+  const meta = (result as { meta?: unknown } | null)?.meta;
+  return meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined;
+}
+
+function metaString(meta: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = meta[key];
+    if (value !== undefined && value !== null) return String(value);
+  }
+  return undefined;
 }

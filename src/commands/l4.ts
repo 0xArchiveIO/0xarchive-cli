@@ -1,6 +1,7 @@
 import {
   resolveApiKey,
   validateExchange,
+  requireExchange,
   createClient,
   getExchangeClient,
 } from '../lib/client.js';
@@ -31,6 +32,7 @@ interface L4GetOptions {
 export async function l4GetCommand(options: L4GetOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 order book');
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
 
@@ -77,6 +79,7 @@ interface L4DiffsOptions {
 export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 diffs');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -153,6 +156,7 @@ interface L4HistoryOptions {
 export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 history');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
