@@ -74,6 +74,14 @@ const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
   'spot_l4_diffs',
   'spot_l4_orders',
   'spot_twap',
+  // Full-depth L2 book: an l4_snapshot with every price level, then l4_batch
+  // messages of level changes. Live only.
+  'orderbook_full',
+  'hip3_orderbook_full',
+  // HIP-4 live channels. hip4_orderbook and hip4_open_interest are replay-only.
+  'hip4_trades',
+  'hip4_l4_diffs',
+  'hip4_l4_orders',
 ]);
 
 // Lighter channels (mainnet and Robinhood Chain) that support historical
@@ -84,6 +92,15 @@ export const LIGHTER_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
   lighter_l3_orderbook:
     'Use `oxa l3 get` for the current L3 book or `oxa l3 history` for stored snapshots.',
   rh_lighter_candles: 'Use `oxa candles --exchange rh-lighter` for candle history.',
+};
+
+// HIP-4 channels served from stored data only; their live bridges are paused.
+// Rejected before a socket is opened, with a pointer to replay and REST.
+export const HIP4_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
+  hip4_orderbook:
+    'Use `oxa stream replay hip4_orderbook <coin> --start ... --end ...` for stored books, or `oxa hip4 orderbook get <coin>` for the current book.',
+  hip4_open_interest:
+    'Use `oxa stream replay hip4_open_interest <coin> --start ... --end ...` for stored snapshots, or `oxa hip4 oi current <coin>` for the current value.',
 };
 
 // A connection that falls behind a Lighter live channel (either deployment)
@@ -184,6 +201,17 @@ export function parseIntervalMs(raw: string | undefined, channel: string): numbe
   return n;
 }
 
+/**
+ * HIP-4 WebSocket channels name coins in their on-chain form (`#0`). The CLI
+ * takes bare numerics everywhere else, so `0` and `%230` become `#0` here.
+ */
+export function wsSymbol(channel: string, symbol: string): string {
+  if (!channel.startsWith('hip4_')) return symbol;
+  const trimmed = String(symbol).trim();
+  const digits = trimmed.replace(/^(#|%23)/i, '');
+  return /^\d+$/.test(digits) ? `#${digits}` : trimmed;
+}
+
 export function buildSubscribeMessage(
   channel: string,
   symbol: string,
@@ -208,6 +236,7 @@ async function streamChannel(
   options: StreamOptions,
 ): Promise<void> {
   const format = validateFormat(options.format);
+  symbol = wsSymbol(channel, symbol);
   const durationMs = parseDuration(options.durationMs);
   const intervalMs = parseIntervalMs(options.intervalMs, channel);
   const apiKey = resolveApiKey(options.apiKey);
@@ -331,6 +360,12 @@ export async function streamGenericCommand(
   if (Object.hasOwn(LIGHTER_REPLAY_ONLY_CHANNELS, ch)) {
     exitError(
       `${ch} supports historical replay only; live subscriptions are not available on this channel. ${LIGHTER_REPLAY_ONLY_CHANNELS[ch]}`,
+      EXIT.VALIDATION,
+    );
+  }
+  if (Object.hasOwn(HIP4_REPLAY_ONLY_CHANNELS, ch)) {
+    exitError(
+      `${ch} is served from stored data only; live subscriptions are not available on this channel. ${HIP4_REPLAY_ONLY_CHANNELS[ch]}`,
       EXIT.VALIDATION,
     );
   }

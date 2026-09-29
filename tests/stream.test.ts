@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  HIP4_REPLAY_ONLY_CHANNELS,
   LIGHTER_REPLAY_ONLY_CHANNELS,
   buildSubscribeMessage,
   isLighterDropNotice,
@@ -9,6 +10,7 @@ import {
   streamLiquidationsCommand,
   streamOrderbookCommand,
   streamTradesCommand,
+  wsSymbol,
 } from '../src/commands/stream.js';
 
 class ProcessExit extends Error {
@@ -512,5 +514,63 @@ describe('oxa stream over a WebSocket', () => {
       () => streamLiquidationsCommand('BTC', { exchange: 'rh-lighter', format: 'json' }),
       'Invalid exchange "rh-lighter" for `oxa stream liquidations`. Must be one of: hyperliquid, hip3.',
     );
+  });
+
+  it.each([
+    ['orderbook_full', 'BTC'],
+    ['hip3_orderbook_full', 'km:US500'],
+    ['hip4_trades', '#0'],
+    ['hip4_l4_diffs', '#0'],
+    ['hip4_l4_orders', '#0'],
+  ])('forwards the live channel %s through `oxa stream subscribe`', async (channel, symbol) => {
+    await streamGenericCommand(channel, symbol, { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel, symbol });
+  });
+
+  it('passes the full-depth snapshot and batches through as NDJSON', async () => {
+    await streamGenericCommand('orderbook_full', 'BTC', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const snapshot = {
+      type: 'l4_snapshot',
+      channel: 'orderbook_full',
+      coin: 'BTC',
+      symbol: 'BTC',
+      data: { bid_count: 1, ask_count: 1, bids: [{ px: 1, sz: 2, n: 1 }], asks: [{ px: 3, sz: 4, n: 1 }] },
+    };
+    const batch = { type: 'l4_batch', channel: 'orderbook_full', coin: 'BTC', symbol: 'BTC', data: [{ px: 1, sz: 0 }] };
+    ws.message(snapshot);
+    ws.message(batch);
+    expect(stdoutLines()).toEqual([JSON.stringify(snapshot) + '\n', JSON.stringify(batch) + '\n']);
+  });
+
+  it.each(['0', '%230', '#0'])('subscribes to HIP-4 coin %s as #0', async (symbol) => {
+    await streamGenericCommand('hip4_trades', symbol, { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_trades', symbol: '#0' });
+  });
+
+  it.each(Object.keys(HIP4_REPLAY_ONLY_CHANNELS))(
+    'rejects the stored-only channel %s before opening a socket',
+    async (channel) => {
+      await expectValidationExit(
+        () => streamGenericCommand(channel, '0', { format: 'json' }),
+        `${channel} is served from stored data only; live subscriptions are not available on this channel. ` +
+          HIP4_REPLAY_ONLY_CHANNELS[channel],
+      );
+    },
+  );
+});
+
+describe('WebSocket symbols', () => {
+  it('uses the #<n> form on HIP-4 channels only', () => {
+    expect(wsSymbol('hip4_l4_diffs', '42')).toBe('#42');
+    expect(wsSymbol('hip4_trades', ' %2342 ')).toBe('#42');
+    expect(wsSymbol('hip4_trades', 'not-a-coin')).toBe('not-a-coin');
+    expect(wsSymbol('trades', '42')).toBe('42');
+    expect(wsSymbol('hip3_trades', 'km:US500')).toBe('km:US500');
   });
 });

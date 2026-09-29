@@ -5,6 +5,7 @@ import {
   getExchangeClient,
   isLighterExchange,
   sdkTooOld,
+  exchangeLabel,
   type Exchange,
 } from '../lib/client.js';
 import {
@@ -20,6 +21,9 @@ import {
 import { handleError } from '../lib/errors.js';
 import { writeOutputFile } from '../lib/file.js';
 import { parseTimestamp, parseLimit } from '../lib/time.js';
+import { getLiquidationLevelsResource, hyperliquidVenue } from '../lib/sdk.js';
+import { levelHistoryParams, levelParams, type LevelHistoryOptions, type LevelOptions } from '../lib/levels.js';
+import { cell, emitDocument, emitPage, field, printMore, toPage } from '../lib/emit.js';
 
 interface LiquidationsOptions {
   exchange: string;
@@ -312,6 +316,111 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
       outputJson(envelope);
     }
 
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+// ── oxa liquidations levels / levels-history ────────────────────────────
+// Projected forced-liquidation levels (Hyperliquid and HIP-3), computed from
+// clearinghouse positions and margin state about every five minutes, with
+// history from 2026-07-27. These are not pending trigger orders; see
+// `oxa orders trigger-levels` for those.
+
+interface LiquidationLevelsOptions extends LevelOptions {
+  exchange: string;
+  symbol: string;
+  at?: string;
+  apiKey?: string;
+  format: string;
+}
+
+interface LiquidationLevelsHistoryOptions extends LevelHistoryOptions {
+  exchange: string;
+  symbol: string;
+  out?: string;
+  apiKey?: string;
+  format: string;
+}
+
+function liquidationLevelRows(levels: unknown): string[][] {
+  return (Array.isArray(levels) ? levels : []).map((b) => [
+    cell(field(b, 'price')),
+    cell(field(b, 'longNotional', 'long_notional')),
+    cell(field(b, 'longCount', 'long_count')),
+    cell(field(b, 'shortNotional', 'short_notional')),
+    cell(field(b, 'shortCount', 'short_count')),
+  ]);
+}
+
+export async function liquidationsLevelsCommand(options: LiquidationLevelsOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const venue = hyperliquidVenue(options.exchange, 'liquidation levels');
+  const params = levelParams(options);
+  if (options.at !== undefined) params.at = parseTimestamp(options.at, 'at');
+  const apiKey = resolveApiKey(options.apiKey);
+  const client = createClient(apiKey);
+
+  const levels = getLiquidationLevelsResource(client, venue);
+  try {
+    const snapshot = await levels.levels(options.symbol, params);
+    emitDocument(snapshot, { format }, () => {
+      prettyHeader(`${options.symbol} Liquidation Levels (${exchangeLabel(venue)})`);
+      prettyField('Snapshot', field(snapshot, 'snapshotTs', 'snapshot_ts') as string | undefined);
+      prettyField('Block', field(snapshot, 'blockNumber', 'block_number') as number | undefined);
+      prettyField('Mid price', field(snapshot, 'midPrice', 'mid_price') as number | undefined);
+      prettyField('Total long at risk', field(snapshot, 'totalLong', 'total_long') as number | undefined);
+      prettyField('Total short at risk', field(snapshot, 'totalShort', 'total_short') as number | undefined);
+      prettyField('Flagged notional', field(snapshot, 'flaggedNotional', 'flagged_notional') as number | undefined);
+      const rows = liquidationLevelRows(field(snapshot, 'levels'));
+      if (rows.length === 0) {
+        prettyDim('No levels in this range.');
+      } else {
+        prettyTable(['Price', 'Long Notional', 'Longs', 'Short Notional', 'Shorts'], rows);
+      }
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function liquidationsLevelsHistoryCommand(options: LiquidationLevelsHistoryOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const venue = hyperliquidVenue(options.exchange, 'liquidation levels');
+  const params = levelHistoryParams(options);
+  const apiKey = resolveApiKey(options.apiKey);
+  const client = createClient(apiKey);
+
+  const levels = getLiquidationLevelsResource(client, venue);
+  try {
+    const result = await levels.levelsHistory(options.symbol, params);
+    const page = toPage(result);
+    const snapshots = Array.isArray(page.data) ? page.data : [];
+    emitPage(page, { format, out: options.out }, { exchange: venue, symbol: options.symbol }, () => {
+      prettyHeader(`${options.symbol} Liquidation Levels History (${exchangeLabel(venue)}), ${snapshots.length} snapshots`);
+      if (snapshots.length === 0) {
+        prettyDim('No snapshots found.');
+        return;
+      }
+      const shown = snapshots.slice(0, 20);
+      prettyTable(
+        ['Snapshot', 'Mid Price', 'Total Long', 'Total Short', 'Flagged', 'Buckets'],
+        shown.map((s) => {
+          const levels = field(s, 'levels');
+          return [
+            cell(field(s, 'snapshotTs', 'snapshot_ts')),
+            cell(field(s, 'midPrice', 'mid_price')),
+            cell(field(s, 'totalLong', 'total_long')),
+            cell(field(s, 'totalShort', 'total_short')),
+            cell(field(s, 'flaggedNotional', 'flagged_notional')),
+            Array.isArray(levels) ? String(levels.length) : '-',
+          ];
+        }),
+      );
+      printMore(shown.length, snapshots.length, page.nextCursor);
+    });
     process.exit(EXIT.SUCCESS);
   } catch (error) {
     handleError(error, apiKey);

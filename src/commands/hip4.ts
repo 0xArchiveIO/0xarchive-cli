@@ -18,6 +18,13 @@ import { pricesCommand } from './prices.js';
 import { ordersHistoryCommand, ordersFlowCommand, ordersTpslCommand } from './orders.js';
 import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './l4.js';
 import { outcomesListCommand, outcomesGetCommand } from './outcomes.js';
+import { resolveApiKey, createClient } from '../lib/client.js';
+import { validateFormat, prettyHeader, prettyField, prettyTable, prettyDim, EXIT, exitError } from '../lib/output.js';
+import { handleError } from '../lib/errors.js';
+import { parseIntInRange } from '../lib/params.js';
+import { getHip4QuestionsResource } from '../lib/sdk.js';
+import { cell, emitDocument, emitPage, field, printMore, toPage } from '../lib/emit.js';
+import { compact } from '../lib/positions.js';
 
 interface BaseFormatOpts {
   apiKey?: string;
@@ -229,4 +236,85 @@ export async function hip4OutcomesGet(
   options: { apiKey?: string; format: string },
 ): Promise<void> {
   return outcomesGetCommand({ outcomeId, ...options });
+}
+
+// ── questions ──────────────────────────────────────────────────────────────
+// A question groups binary outcomes under one ballot: one named outcome per
+// choice, plus a fallback outcome that resolves Yes when no named choice does.
+
+function questionRow(q: unknown): string[] {
+  const named = field(q, 'namedOutcomeIds', 'named_outcome_ids');
+  const settled = field(q, 'settledNamedOutcomes', 'settled_named_outcomes');
+  return [
+    cell(field(q, 'questionId', 'question_id')),
+    cell(field(q, 'name')),
+    Array.isArray(named) ? named.join(', ') : '-',
+    cell(field(q, 'fallbackOutcomeId', 'fallback_outcome_id')),
+    Array.isArray(settled) ? String(settled.length) : '-',
+    cell(field(q, 'description')),
+  ];
+}
+
+export async function hip4QuestionsList(options: {
+  limit?: string;
+  cursor?: string;
+  apiKey?: string;
+  format: string;
+}): Promise<void> {
+  const format = validateFormat(options.format);
+  const apiKey = resolveApiKey(options.apiKey);
+  const limit = parseIntInRange(options.limit, 'limit', 1, 1000);
+  const client = createClient(apiKey);
+
+  const resource = getHip4QuestionsResource(client);
+  try {
+    const result = await resource.list(compact({ limit, cursor: options.cursor }));
+    const page = toPage(result);
+    const questions = Array.isArray(page.data) ? page.data : [];
+    emitPage(page, { format }, {}, () => {
+      prettyHeader(`HIP-4 Questions, ${questions.length} on this page`);
+      if (questions.length === 0) {
+        prettyDim('No questions found.');
+        return;
+      }
+      const shown = questions.slice(0, 20);
+      prettyTable(['Question', 'Name', 'Named Outcomes', 'Fallback', 'Settled', 'Description'], shown.map(questionRow));
+      printMore(shown.length, questions.length, page.nextCursor);
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function hip4QuestionsGet(
+  questionId: string,
+  options: { apiKey?: string; format: string },
+): Promise<void> {
+  const format = validateFormat(options.format);
+  const apiKey = resolveApiKey(options.apiKey);
+  if (!/^\d+$/.test(questionId)) {
+    exitError(`Invalid question_id "${questionId}". Must be a non-negative integer.`, EXIT.VALIDATION);
+  }
+  const client = createClient(apiKey);
+
+  const resource = getHip4QuestionsResource(client);
+  try {
+    const question = await resource.get(Number(questionId));
+    emitDocument(question, { format }, () => {
+      const named = field(question, 'namedOutcomeIds', 'named_outcome_ids');
+      const settled = field(question, 'settledNamedOutcomes', 'settled_named_outcomes');
+      prettyHeader(`HIP-4 Question ${questionId}`);
+      prettyField('Name', field(question, 'name') as string | undefined);
+      prettyField('Description', field(question, 'description') as string | undefined);
+      prettyField('Named outcomes', Array.isArray(named) ? named.join(', ') : undefined);
+      prettyField('Fallback outcome', field(question, 'fallbackOutcomeId', 'fallback_outcome_id') as number | undefined);
+      prettyField('Settled named outcomes', Array.isArray(settled) ? settled.join(', ') || 'none' : undefined);
+      prettyField('First seen', field(question, 'firstSeenAt', 'first_seen_at') as string | undefined);
+      prettyField('Last updated', field(question, 'lastUpdatedAt', 'last_updated_at') as string | undefined);
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
 }

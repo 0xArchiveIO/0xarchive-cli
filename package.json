@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsx src/cli.ts",
+    "dev": "tsx src/bin.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

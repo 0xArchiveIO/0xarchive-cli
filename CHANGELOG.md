@@ -8,7 +8,22 @@
 - Live Robinhood Chain streams: `oxa stream orderbook <symbol> --exchange rh-lighter` and `oxa stream trades <symbol> --exchange rh-lighter`, and `oxa stream subscribe` accepts `rh_lighter_orderbook`, `rh_lighter_trades`, `rh_lighter_open_interest`, and `rh_lighter_funding`. Messages have the same shapes as the `lighter_*` live channels, `--interval-ms` (100 to 5000) works on `rh_lighter_orderbook`, and drop notices on `rh_lighter_*` channels are warnings, as on Lighter mainnet. They are served on `wss://api.0xarchive.io/ws`, the CLI default. `rh_lighter_candles` is replay-only and is rejected before a socket opens.
 - Account positions, `oxa positions ...`, on `hyperliquid`, `hip3`, `lighter`, and `rh-lighter`: `get` (latest snapshot, or as of `--timestamp`), `history` (hourly snapshots), `changes` (the change log), `market` (every open position in one market, with `--side`, `--min-value`, and `--include-system` on Lighter), `summary` (long/short positioning now or hourly), and `all` (every open position at one hour). Hyperliquid and HIP-3 add `account` and `account-history`. Hyperliquid and HIP-3 are keyed by `--address`; Lighter by `--account <index>`. JSON output includes the response `meta` (as-of time, snapshot, source, quality, staleness, and finalization fields).
 - `oxa accounts by-l1 --l1-address 0x...` lists the Lighter mainnet account indices owned by an L1 address.
-- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`: a resume point in Unix ms, and the API starts the response at the first bucket that opens after it. The API does not return `nextCursor` on order flow yet: it arrives with an API switch, and until then `nextCursor` in the order-flow output is `null`.
+- `--cursor` on `oxa orders flow` and `oxa hip4 orders flow`. Order flow is paged: a page holds the oldest `--limit` buckets of the window, and `nextCursor` is set while more may follow. Run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval` until it is `null`. With `--out`, the summary reports `has_more` and `nextCursor`, as `oxa orders history` does.
+- `oxa breadth current` and `oxa breadth history` (`--exchange hyperliquid` or `hip3`): the share of eligible instruments above their current UTC-session VWAP, with the counts behind it. `valuePct` stays `null` when no instrument is eligible, in JSON and in pretty output. History begins 2026-08-24 on Hyperliquid and 2026-08-28 on HIP-3; `--interval` keeps the last snapshot in each bucket.
+- `oxa cvd <symbol>` (`--exchange hyperliquid` or `hip3`): cumulative volume delta, taker buy and sell notional per bucket (`1m` to `1w`, default `1h`) with the delta and a running total, cursor paged. The running total restarts on every page, and `meta.notice` says so.
+- `oxa liquidations levels` and `oxa liquidations levels-history` (Hyperliquid and HIP-3): projected forced-liquidation levels in price buckets around the mark price, current or at `--at`, with history from 2026-07-27. `oxa orders trigger-levels` and `oxa orders trigger-levels-history`: the pending stop-loss and take-profit trigger map, with history at a 15-minute cadence. `--range-pct`, `--buckets`, and `--side` on all four; `--summary` lists history snapshots without their buckets.
+- `oxa hip3 oracle external-price <symbol>` and `oxa hip3 oracle discovery-bounds <symbol>`: the deployer-pushed external price with the mark price, and the instantaneous discovery bounds around the reference price.
+- `oxa hip4 questions list` and `oxa hip4 questions get <question_id>`: HIP-4 questions, binary outcomes grouped under one ballot with a fallback outcome.
+- `oxa wallets classify` (`--exchange hyperliquid` or `hip3`): precomputed daily behavioral metrics per wallet, with `--min-orders`, `--min-volume-usd`, `--sort`, `--order`, `--uses-twap`, `--uses-priority-gas`, `--min-cancel-rate`, `--max-cancel-rate`, `--date`, and `--limit` / `--offset` paging.
+- `oxa symbols`: the public symbol universe across every venue, with coverage dates, data types, and coverage and estimated size per data type. `--exchange` and `--symbol` filter the list locally.
+- `oxa webhooks ...`: the event catalog (`event-types`) and plan limits (`limits`); endpoints (`endpoints list|create|delete|enable|rotate-secret|test|deliveries`) and `redeliver`; subscriptions (`subscriptions list|create|update|delete|resume|resume-all`) with wire-shaped JSON filters inline or from a file; the `estimate` and `dry-run` previews; and watched wallets (`addresses list|add|delete`). Deleting and rotating ask for confirmation in a terminal, or take `--yes`.
+- `oxa webhooks verify`: checks a delivery's `0xa-signature` against the raw body (`--body-file` or stdin) with the SDK verifier, accepting either of two secrets during a rotation and enforcing the 300-second replay window unless `--tolerance` or `--ignore-timestamp` says otherwise. It needs no API key and never prints the secret.
+- `oxa stream replay <channel> <symbol> --start --end [--speed] [--interval]`: WebSocket replay through the SDK client, written as NDJSON until the replay completes. Live-only channels are refused before a socket opens, with the SDK's error where the SDK refuses them.
+- `oxa stream subscribe` accepts `orderbook_full` and `hip3_orderbook_full` (the full-depth L2 book: an `l4_snapshot` with every level, then `l4_batch` level changes) and the live HIP-4 channels `hip4_trades`, `hip4_l4_diffs`, and `hip4_l4_orders`. HIP-4 coins are given as bare numerics and sent in the `#<n>` form the WebSocket API expects. `hip4_orderbook` and `hip4_open_interest`, served from stored data only, are refused before a socket opens with a pointer to `oxa stream replay`.
+- `--account <index>` on `oxa l3 get` and `oxa l3 history`: only the orders owned by one Lighter account index. `--timestamp` on `oxa l3 get` reads a historical snapshot.
+- `oxa data-quality ...`: `status`, `coverage` (every venue, one venue with `--exchange`, or one symbol with `--exchange` and `--symbol`, including gaps and cadence, with `--from` and `--to` bounding the gap search), `incidents` (filtered by `--status`, `--exchange`, and `--since`, offset paged), `incident <incident_id>`, `latency`, `sla` (`--year`, `--month`), and `positions-freshness`.
+- `oxa spot l4-diffs <symbol>` and `oxa spot l4-history <symbol>`: Spot L4 orderbook diffs and checkpoints over a time range, cursor paged.
+- `oxa hip4 outcomes by-slug <slug>` and `oxa outcomes by-slug <slug>`: a HIP-4 outcome market by its outcome or side slug.
 - A package-contents check (`npm run check:pack`) and a CI workflow that runs the typecheck, tests, build, and that check.
 
 ### Changed
@@ -19,11 +34,22 @@
 - `--interval 1m` works on `oxa funding history`, `oxa oi history`, `oxa prices`, `oxa liquidations volume`, and the HIP-4 open interest and price commands. The API now serves 1-minute buckets on those routes. Funding, open interest, and prices used to refuse `1m` before sending the request.
 - `oxa orders flow` and `oxa hip4 orders flow` describe `--interval` as the bucket widths the API serves: `1m`, `5m`, `15m`, `1h` (default `1h`). The help used to list `30m`, `4h`, and `1d`, which the API refuses.
 - The HIP-4 funding and liquidations refusals now list every exchange that serves those routes.
-- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, and Lighter liquidations.
+- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, Lighter liquidations, webhooks, CVD, Hyperliquid and HIP-3 breadth, the HIP-3 oracle, HIP-4 questions, wallet classification, the symbol list, and positions freshness.
+
+### Removed
+
+- Flags the API ignores, so they returned the same rows with or without them: `--depth` on `oxa l2 history` (every full-depth checkpoint carries the whole book) and on `oxa l3 history` (every snapshot holds up to 250 orders per side), `--user`, `--status`, and `--order-type` on `oxa spot orders` (Spot order history takes the time range and cursor only), and `--user` on `oxa spot trades`. Hyperliquid, HIP-3, and HIP-4 order history keep their filters. Passing a removed flag is now an unknown-option error.
+- No command calls a route the API does not serve: HIP-4 has no full-depth L2 or trigger-level routes, Spot has no order flow, TP/SL, or trigger-level routes, and liquidations by user are Hyperliquid only. The CLI refuses these combinations before any request.
+
+### Fixed
+
+- JSON output larger than the pipe buffer (64 KiB) was cut off when piped to another program, for example `oxa trades fetch ... | jq`, because the process exited before stdout drained. Output is now written in full before the process exits.
+- A reader that closes the pipe early (`oxa stream ... | head`) no longer ends the CLI with an EPIPE stack trace; it exits quietly with code 0.
 
 ### Documentation
 
 - Documentation links point at docs.0xarchive.io.
+- The README documents order-flow paging with `--cursor` and `nextCursor`, every new command above, and WebSocket replay through `oxa stream replay` in place of the note that the CLI did not start replays.
 
 ### Development
 

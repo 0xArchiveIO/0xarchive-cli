@@ -1,4 +1,5 @@
-import { resolveApiKey, createHip4Client } from '../lib/client.js';
+import { resolveApiKey, createHip4Client, createClient } from '../lib/client.js';
+import { getHip4OutcomesResource } from '../lib/sdk.js';
 import {
   outputJson,
   validateFormat,
@@ -114,6 +115,45 @@ export async function outcomesGetCommand(options: OutcomesGetOptions): Promise<v
         prettyField('Side Supply Parity', oi.sideSupplyParity);
         prettyField('Currency', oi.currency);
         prettyField('As Of', oi.asOf);
+      }
+      process.stdout.write('\n');
+    } else {
+      outputJson(detail);
+    }
+
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function outcomesBySlugCommand(slug: string, options: { apiKey?: string; format: string }): Promise<void> {
+  const format = validateFormat(options.format);
+  const value = String(slug ?? '').trim();
+  if (value === '') {
+    exitError('A slug is required, e.g. btc-above-78213-may-03-0600.', EXIT.VALIDATION);
+  }
+  const apiKey = resolveApiKey(options.apiKey);
+  const outcomes = getHip4OutcomesResource(createClient(apiKey));
+
+  try {
+    // Slugs can carry spaces, colons, and braces; the SDK encodes the path segment.
+    const detail = (await outcomes.getBySlug(value)) as any;
+
+    if (format === 'pretty') {
+      prettyHeader(`HIP-4 Outcome ${detail?.outcomeId ?? value}`);
+      prettyField('Slug', value);
+      prettyField('Name', detail?.name);
+      prettyField('Class', detail?.class);
+      prettyField('Underlying', detail?.underlying);
+      prettyField('Expiry', detail?.expiry);
+      prettyField('Target Price', detail?.targetPrice);
+      const sides = Array.isArray(detail?.sideSpecs) ? detail.sideSpecs : [];
+      if (sides.length) {
+        prettyTable(
+          ['Side', 'Name', 'Coin', 'Slug'],
+          sides.map((side: any) => [String(side.side ?? '-'), side.name ?? '-', side.coin ?? '-', side.slug ?? '-']),
+        );
       }
       process.stdout.write('\n');
     } else {
