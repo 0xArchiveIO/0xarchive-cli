@@ -862,9 +862,9 @@ describe('new analytics commands', () => {
     it.each([
       [['hip4', 'outcomes', 'by-slug'], 'btc-above-78213-may-03-0600', 'btc-above-78213-may-03-0600'],
       [['outcomes', 'by-slug'], 'eth-above-1863.4-yes-aug-05-0600', 'eth-above-1863.4-yes-aug-05-0600'],
-      [['hip4', 'outcomes', 'by-slug'], 'june-fed-rate-change-no change', 'june-fed-rate-change-no%20change'],
-      [['hip4', 'outcomes', 'by-slug'], 'template-pricetouch-template:yes', 'template-pricetouch-template%3Ayes'],
-    ])('%j %s looks the outcome up by its encoded slug', async (command, slug, sent) => {
+      [['hip4', 'outcomes', 'by-slug'], 'june-fed-rate-change-no change', 'june-fed-rate-change-no change'],
+      [['hip4', 'outcomes', 'by-slug'], 'template-pricetouch-template:yes', 'template-pricetouch-template:yes'],
+    ])('%j %s passes the slug to the SDK unchanged (the SDK encodes it)', async (command, slug, sent) => {
       sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug.mockResolvedValue(OUTCOME);
       expect(await runCli(...command, slug)).toBe(0);
       expect(sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug).toHaveBeenCalledWith(sent);

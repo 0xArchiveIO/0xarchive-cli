@@ -137,8 +137,8 @@ export async function outcomesBySlugCommand(slug: string, options: { apiKey?: st
   const outcomes = getHip4OutcomesResource(createClient(apiKey));
 
   try {
-    // Slugs can carry spaces, colons, and braces; encode them for the path.
-    const detail = (await outcomes.getBySlug(encodeURIComponent(value))) as any;
+    // Slugs can carry spaces, colons, and braces; the SDK encodes the path segment.
+    const detail = (await outcomes.getBySlug(value)) as any;
 
     if (format === 'pretty') {
       prettyHeader(`HIP-4 Outcome ${detail?.outcomeId ?? value}`);
