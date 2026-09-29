@@ -120,13 +120,16 @@ export function compact<T extends object>(params: T): T {
 export interface PageEnvelope {
   data: unknown;
   nextCursor: string | null;
+  /** True while another page follows. */
+  has_more: boolean;
   meta?: Record<string, unknown>;
 }
 
 /**
  * Normalize an SDK result into the CLI's JSON envelope: `data`, `nextCursor`,
- * and `meta` when the SDK returns response meta (as_of, snapshot_ts, source,
- * quality, stale, built_through, finalized_through, totals, notices).
+ * `has_more`, and `meta` when the SDK returns response meta (as_of,
+ * snapshot_ts, source, quality, stale, built_through, finalized_through,
+ * totals, notices).
  */
 export function toEnvelope(result: unknown): PageEnvelope {
   if (result !== null && typeof result === 'object' && !Array.isArray(result)) {
@@ -134,16 +137,22 @@ export function toEnvelope(result: unknown): PageEnvelope {
     const meta = r.meta !== null && typeof r.meta === 'object' ? (r.meta as Record<string, unknown>) : undefined;
     const cursor = r.nextCursor ?? meta?.nextCursor ?? null;
     const nextCursor = typeof cursor === 'string' && cursor !== '' ? cursor : null;
+    const hasMore =
+      typeof r.hasMore === 'boolean'
+        ? r.hasMore
+        : typeof meta?.hasMore === 'boolean'
+          ? meta.hasMore
+          : nextCursor !== null;
     let data: unknown;
     if ('data' in r) {
       data = r.data;
     } else {
-      const { meta: _meta, nextCursor: _next, ...rest } = r;
+      const { meta: _meta, nextCursor: _next, hasMore: _hasMore, ...rest } = r;
       data = rest;
     }
-    return meta ? { data, nextCursor, meta } : { data, nextCursor };
+    return meta ? { data, nextCursor, has_more: hasMore, meta } : { data, nextCursor, has_more: hasMore };
   }
-  return { data: result, nextCursor: null };
+  return { data: result, nextCursor: null, has_more: false };
 }
 
 /** Read a field that may arrive camelCase (SDK) or snake_case (raw API). */

@@ -77,7 +77,7 @@ describe('HIP-4 candle coverage', () => {
       limit: '100',
       cursor: 'page-1',
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       data: [
         {
           timestamp: '2026-05-02T00:00:00Z',
@@ -89,7 +89,10 @@ describe('HIP-4 candle coverage', () => {
         },
       ],
       nextCursor: 'next-page',
+      hasMore: true,
     });
+    // The request selects the API version the CLI is written against.
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ '0xArchive-Version': '2026-10-01' });
   });
 
   it('allows valid HIP-4 candle CLI requests while retaining range validation', async () => {

@@ -75,7 +75,7 @@ describe('Hyperliquid Spot candle coverage', () => {
       limit: '1000',
       cursor: 'opaque.cursor/v0',
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       data: [
         {
           timestamp: '2025-03-22T10:51:00Z',
@@ -89,7 +89,10 @@ describe('Hyperliquid Spot candle coverage', () => {
         },
       ],
       nextCursor: 'opaque.cursor/v1',
+      hasMore: true,
     });
+    // The request selects the API version the CLI is written against.
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ '0xArchive-Version': '2026-10-01' });
   });
 
   it('allows the Spot candle command and uses the Spot route', async () => {

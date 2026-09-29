@@ -32,8 +32,9 @@ import {
 import { writeOutputFile } from '../lib/file.js';
 import { SpotCandlesClient } from '../lib/spot-candles.js';
 import { getSpotL4Resource } from '../lib/sdk.js';
-import { emitPage, toPage } from '../lib/emit.js';
+import { emitPage, hasMore, pageEnvelope, printNextPage, toPage } from '../lib/emit.js';
 import { compact } from '../lib/positions.js';
+import { parseChoice } from '../lib/params.js';
 
 interface BaseFormatOpts {
   apiKey?: string;
@@ -159,7 +160,7 @@ export async function spotCandles(
       cursor: options.cursor,
     });
     const candles = result.data;
-    const envelope = { data: candles, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, candles);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -169,7 +170,7 @@ export async function spotCandles(
         exchange: 'spot',
         symbol,
         interval: interval ?? '1h',
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
@@ -177,7 +178,7 @@ export async function spotCandles(
         prettyField('Records', candles.length);
         prettyField('Interval', interval ?? '1h');
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -201,7 +202,7 @@ export async function spotCandles(
         prettyTable(['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'], rows);
 
         if (candles.length > 20) prettyDim(`... and ${candles.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -274,10 +275,12 @@ export async function spotTrades(
     end?: string;
     limit?: string;
     cursor?: string;
+    side?: string;
     out?: string;
   },
 ): Promise<void> {
   const format = validateFormat(options.format);
+  const side = parseChoice(options.side, 'side', ['buy', 'sell'] as const);
   const apiKey = resolveApiKey(options.apiKey);
   const limit = parseLimit(options.limit);
 
@@ -313,10 +316,11 @@ export async function spotTrades(
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
+    if (side) sdkParams.side = side;
 
     const result = await client.spot.trades.list(symbol, sdkParams as any);
     const trades = result.data;
-    const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, trades);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -325,14 +329,14 @@ export async function spotTrades(
         records: trades.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Trades (spot)`);
         prettyField('Records', trades.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -351,7 +355,7 @@ export async function spotTrades(
         ]);
         prettyTable(['Timestamp', 'Side', 'Price', 'Size'], rows);
         if (trades.length > 20) prettyDim(`... and ${trades.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -431,7 +435,7 @@ async function spotL4Range(symbol: string, options: SpotL4RangeOptions, kind: 'd
         prettyDim(kind === 'diffs' ? 'No L4 diffs found.' : 'No L4 checkpoints found.');
       } else {
         prettyDim(`${records.length} ${kind === 'diffs' ? 'diff' : 'checkpoint'} records returned`);
-        if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(page);
       }
     });
     process.exit(EXIT.SUCCESS);
@@ -479,7 +483,7 @@ export async function spotOrdersHistory(
 
     const result = await client.spot.orders.history(symbol, sdkParams as any);
     const orders = result.data;
-    const envelope = { data: orders, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, orders);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -488,14 +492,14 @@ export async function spotOrdersHistory(
         records: orders.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Order History (spot)`);
         prettyField('Records', orders.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -516,7 +520,7 @@ export async function spotOrdersHistory(
         ]);
         prettyTable(['Timestamp', 'Side', 'Price', 'Size', 'Status', 'User'], rows);
         if (orders.length > 20) prettyDim(`... and ${orders.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -560,7 +564,7 @@ export async function spotTwapBySymbol(
 
     const result = await client.spot.twap.bySymbol(symbol, sdkParams as any);
     const statuses = result.data;
-    const envelope = { data: statuses, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, statuses);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -569,14 +573,14 @@ export async function spotTwapBySymbol(
         records: statuses.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} TWAP Statuses (spot)`);
         prettyField('Records', statuses.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -597,7 +601,7 @@ export async function spotTwapBySymbol(
         ]);
         prettyTable(['Timestamp', 'Coin', 'Side', 'Status', 'User', 'TWAP ID'], rows);
         if (statuses.length > 20) prettyDim(`... and ${statuses.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -641,7 +645,7 @@ export async function spotTwapByUser(
 
     const result = await client.spot.twap.byUser(user, sdkParams as any);
     const statuses = result.data;
-    const envelope = { data: statuses, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, statuses);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -650,7 +654,7 @@ export async function spotTwapByUser(
         records: statuses.length,
         exchange: 'spot',
         user,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
@@ -658,7 +662,7 @@ export async function spotTwapByUser(
         prettyField('User', user);
         prettyField('Records', statuses.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -679,7 +683,7 @@ export async function spotTwapByUser(
         ]);
         prettyTable(['Timestamp', 'Coin', 'Side', 'Status', 'TWAP ID'], rows);
         if (statuses.length > 20) prettyDim(`... and ${statuses.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

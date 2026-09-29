@@ -122,7 +122,7 @@ export async function breadthHistoryCommand(options: BreadthHistoryOptions): Pro
           ];
         }),
       );
-      printMore(shown.length, records.length, page.nextCursor);
+      printMore(shown.length, records.length, page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {

@@ -14,6 +14,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, hasMore, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, parsePositiveInt } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 
@@ -109,7 +110,7 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
 
     const result = await (client.lighter as any).l3Orderbook.history(options.symbol, sdkParams);
     const snapshots = result.data;
-    const envelope = { data: snapshots, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, snapshots);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -118,14 +119,14 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
         records: snapshots.length,
         exchange: 'lighter',
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} L3 Orderbook History (lighter)`);
         prettyField('Records', snapshots.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -136,7 +137,7 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
         prettyDim('No L3 orderbook snapshots found.');
       } else {
         prettyDim(`${snapshots.length} snapshot records returned`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

@@ -27,9 +27,6 @@ export function outputJson(data: unknown): void {
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
 }
 
-/**
- * Write error to stderr and exit with the given code.
- */
 const EXIT_LABELS: Record<number, string> = {
   [EXIT.VALIDATION]: 'validation',
   [EXIT.AUTH]: 'auth',
@@ -37,13 +34,37 @@ const EXIT_LABELS: Record<number, string> = {
   [EXIT.INTERNAL]: 'internal',
 };
 
-export function exitError(message: string, code: number): never {
-  const payload = JSON.stringify({
+/**
+ * What the API said about a failed request, added to the error line when the
+ * failure came from the API: the stable `error_code`, the `request_id` to
+ * quote to support, the HTTP `status`, and the refused parameter with the
+ * values it accepts.
+ */
+export interface ApiErrorFields {
+  error_code?: string;
+  request_id?: string;
+  status?: number;
+  param?: string;
+  valid_values?: string[];
+}
+
+/**
+ * Write the error to stderr as one JSON line and exit with the given code.
+ * `code` is the exit code and `type` its class; API failures add the fields
+ * of {@link ApiErrorFields} that the API sent.
+ */
+export function exitError(message: string, code: number, api?: ApiErrorFields): never {
+  const payload: Record<string, unknown> = {
     error: message,
     code,
     type: EXIT_LABELS[code] ?? 'unknown',
-  });
-  process.stderr.write(payload + '\n');
+  };
+  if (api) {
+    for (const [key, value] of Object.entries(api)) {
+      if (value !== undefined && value !== null && value !== '') payload[key] = value;
+    }
+  }
+  process.stderr.write(JSON.stringify(payload) + '\n');
   process.exit(code);
 }
 

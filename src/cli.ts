@@ -120,6 +120,7 @@ import {
   accountHistoryCommand,
   accountsByL1Command,
 } from './commands/positions.js';
+import { capabilitiesCommand } from './commands/capabilities.js';
 import { exitError, EXIT } from './lib/output.js';
 
 const VERSION = '1.10.0';
@@ -129,7 +130,15 @@ const EXCHANGE_DESC =
   'lighter is Lighter mainnet and rh-lighter is Lighter on Robinhood Chain (USDG-quoted; spot symbols are dashed, e.g. AAPL-USDG). ' +
   'For hip4, coins are bare numerics (e.g. "0", "1", "42"); legacy "#0" / "%230" forms are also accepted. mark_price is an implied probability (0..1), not a USD price.';
 
+// Commands that also serve Hyperliquid Spot take `--exchange spot` too.
+const VENUE_DESC =
+  'Exchange: hyperliquid, hip3, hip4, spot, lighter, or rh-lighter. ' +
+  'spot is Hyperliquid Spot (dashed symbols, e.g. HYPE-USDC); lighter is Lighter mainnet and rh-lighter is Lighter on Robinhood Chain (USDG-quoted; spot symbols are dashed, e.g. AAPL-USDG). ' +
+  'For hip4, coins are bare numerics (e.g. "0", "1", "42"); legacy "#0" / "%230" forms are also accepted. mark_price is an implied probability (0..1), not a USD price.';
+
 const HL_EXCHANGE_DESC = 'Exchange: hyperliquid or hip3';
+
+const SIDE_DESC = 'Keep one taker side: buy or sell (filtered by the API, so a full page holds --limit matching trades)';
 
 const LEVEL_RANGE_DESC = 'Percentage range around the mid price, 1 to 50 (default 10)';
 const LEVEL_BUCKETS_DESC = 'Number of price buckets, 10 to 200 (default 50)';
@@ -147,7 +156,7 @@ const POSITIONS_EXCHANGE_DESC =
 // to parse argument vectors directly.
 export const program = new Command()
   .name('oxa')
-  .description('0xArchive CLI — Query historical crypto market data')
+  .description('0xArchive CLI: historical and live market data for Hyperliquid and Lighter')
   .version(VERSION);
 
 // Route unknown commands to stderr with exit code 2
@@ -173,6 +182,19 @@ auth
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(authTestCommand);
 
+// ── oxa capabilities ────────────────────────────────────────────────────
+
+program
+  .command('capabilities')
+  .description(
+    'What each venue serves: REST routes, WebSocket channels (live and replay), first served instant, cadence, page limit, and intervals. No API key needed.',
+  )
+  .option('--exchange <venue>', 'Keep one venue: hyperliquid, hip3, hip4, spot, lighter, or rh-lighter')
+  .option('--datatype <datatype>', 'Keep one datatype, e.g. trades, l4_diffs, oi (with --exchange, the full row)')
+  .option('--api-key <key>', 'API key (optional; or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty (table)', 'json')
+  .action(capabilitiesCommand);
+
 // ── oxa orderbook get ───────────────────────────────────────────────────
 
 const orderbook = program
@@ -182,7 +204,7 @@ const orderbook = program
 orderbook
   .command('get')
   .description('Get an orderbook snapshot')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .option('--depth <n>', 'Number of price levels per side')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms)')
@@ -193,11 +215,11 @@ orderbook
 orderbook
   .command('history')
   .description('Get historical orderbook snapshots over a time range')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--depth <n>', 'Number of price levels per side')
+  .option('--depth <n>', 'Number of price levels per side (every venue)')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -205,19 +227,23 @@ orderbook
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(orderbookHistoryCommand);
 
-// ── oxa trades fetch ────────────────────────────────────────────────────
+// ── oxa trades history (also: oxa trades fetch) ────────────────────────
 
 const trades = program
   .command('trades')
   .description('Trade history commands');
 
 trades
-  .command('fetch')
-  .description('Fetch trade history')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .command('history')
+  .alias('fetch')
+  .description(
+    'Fetch trade history over --start/--end, or the most recent trades without a range (every venue except hyperliquid)',
+  )
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--side <side>', SIDE_DESC)
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -225,12 +251,14 @@ trades
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(tradesFetchCommand);
 
-// ── oxa candles ─────────────────────────────────────────────────────────
+// ── oxa candles history (also: oxa candles) ─────────────────────────────
 
 program
   .command('candles')
-  .description('Get OHLCV candle data (Hyperliquid, Lighter, HIP-3, or HIP-4)')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .description('OHLCV candles (Hyperliquid, HIP-3, HIP-4, Spot, and both Lighter deployments)')
+  .command('history', { isDefault: true })
+  .description('Get OHLCV candles over a time range ("oxa candles --exchange ..." runs this command)')
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
@@ -270,14 +298,17 @@ breadth
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(breadthHistoryCommand);
 
-// ── oxa cvd <symbol> ────────────────────────────────────────────────────
+// ── oxa cvd history (also: oxa cvd <symbol>) ───────────────────────────
 
 program
-  .command('cvd <symbol>')
+  .command('cvd')
+  .description('Cumulative volume delta (Hyperliquid and HIP-3)')
+  .command('history [symbol]', { isDefault: true })
   .description(
-    'Get cumulative volume delta: taker buy and sell notional per bucket, the delta, and a running total that restarts on every page',
+    'Get cumulative volume delta: taker buy and sell notional per bucket, the delta, and a running total that restarts on every page ("oxa cvd <symbol>" runs this command)',
   )
   .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--symbol <symbol>', 'Coin symbol (e.g. BTC, xyz:TSLA); or pass it as the first argument')
   .option('--start <time>', 'Start time (ISO 8601 or Unix ms). Without it: the newest buckets of the 24 hours before --end')
   .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
   .option('--interval <interval>', 'Bucket width: 1m, 5m, 15m, 30m, 1h (default), 4h, 1d, 1w')
@@ -350,8 +381,10 @@ oi
 
 program
   .command('instruments')
-  .description('List available instruments/coins')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .description('Instruments per venue')
+  .command('list', { isDefault: true })
+  .description('List available instruments (Spot lists its pairs); "oxa instruments --exchange ..." runs this command')
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(instrumentsCommand);
@@ -360,7 +393,9 @@ program
 
 program
   .command('symbols')
-  .description('List the public symbol universe with coverage dates and data types, across every venue')
+  .description('The public symbol universe across every venue')
+  .command('list', { isDefault: true })
+  .description('List the public symbol universe with coverage dates and data types, across every venue ("oxa symbols" runs this command)')
   .option('--exchange <exchange>', 'Keep one venue family: hyperliquid, hip3, hip4, spot, lighter, or rh-lighter')
   .option('--symbol <symbol>', 'Keep one symbol (exact match; a bare HIP-4 number also matches #<n>)')
   .option('--out <path>', 'Write JSON output to file')
@@ -459,7 +494,9 @@ liquidations
 
 program
   .command('summary')
-  .description('Get market summary (price, funding, OI, volume) in one call')
+  .description('Market summary per symbol')
+  .command('get', { isDefault: true })
+  .description('Get market summary (price, funding, OI, volume) in one call ("oxa summary --exchange ..." runs this command)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -470,7 +507,9 @@ program
 
 program
   .command('prices')
-  .description('Get mark/oracle/mid price history')
+  .description('Mark, oracle, and mid price history')
+  .command('history', { isDefault: true })
+  .description('Get mark/oracle/mid price history ("oxa prices --exchange ..." runs this command)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
@@ -486,8 +525,10 @@ program
 
 program
   .command('freshness')
-  .description('Check data freshness for a symbol')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .description('Data freshness per symbol')
+  .command('get', { isDefault: true })
+  .description('Check data freshness for a symbol ("oxa freshness --exchange ..." runs this command)')
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, ETH, km:US500)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
@@ -567,14 +608,15 @@ const orders = program
 
 orders
   .command('history')
-  .description('Get order history with user attribution')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .description('Get order history with user attribution (hyperliquid, hip3, hip4, and spot; spot takes the range and cursor only)')
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--user <address>', 'Filter by user wallet address')
   .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
   .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
+  .option('--triggered <bool>', 'true keeps only trigger events; false leaves them out')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -654,7 +696,7 @@ const l4 = program
 l4
   .command('get')
   .description('Get L4 orderbook reconstruction at a timestamp')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .option('--timestamp <ms>', 'Historical timestamp (Unix ms or ISO 8601)')
   .option('--depth <n>', 'Number of price levels per side')
@@ -665,7 +707,7 @@ l4
 l4
   .command('diffs')
   .description('Get L4 orderbook diffs')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
@@ -679,7 +721,7 @@ l4
 l4
   .command('history')
   .description('Get L4 orderbook checkpoints')
-  .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
+  .requiredOption('--exchange <exchange>', VENUE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
@@ -709,11 +751,12 @@ l2
 
 l2
   .command('history')
-  .description('Get L2 all-level orderbook checkpoints (every checkpoint carries the full book)')
+  .description('Get L2 all-level orderbook checkpoints (every checkpoint carries the full book unless --depth caps it)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--depth <n>', 'Number of price levels per side')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -735,36 +778,41 @@ l2
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(l2DiffsCommand);
 
-// ── oxa l3 get / history (Lighter only) ─────────────────────────────────
+// ── oxa lighter l3 get / history (also: oxa l3 ...) ────────────────────
+// L3 is served on Lighter mainnet only, so it sits under the venue. The
+// top-level `oxa l3` group is kept with the same commands.
 
-const l3 = program
-  .command('l3')
-  .description('Lighter mainnet L3 order-level orderbook commands, max 250 orders per side (Lighter on Robinhood Chain has no L3)');
+const L3_DESC =
+  'Lighter mainnet L3 order-level orderbook commands, max 250 orders per side (Lighter on Robinhood Chain has no L3)';
 
-l3
-  .command('get')
-  .description('Get Lighter L3 orderbook snapshot')
-  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
-  .option('--timestamp <time>', 'Historical snapshot time (ISO 8601 or Unix ms); latest when omitted')
-  .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
-  .option('--account <index>', 'Only the orders owned by this Lighter account index')
-  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
-  .option('--format <format>', 'Output format: json or pretty', 'json')
-  .action(l3GetCommand);
+function addL3Commands(group: Command): void {
+  group
+    .command('get')
+    .description('Get Lighter L3 orderbook snapshot')
+    .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
+    .option('--timestamp <time>', 'Historical snapshot time (ISO 8601 or Unix ms); latest when omitted')
+    .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
+    .option('--account <index>', 'Only the orders owned by this Lighter account index')
+    .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+    .option('--format <format>', 'Output format: json or pretty', 'json')
+    .action(l3GetCommand);
 
-l3
-  .command('history')
-  .description('Get historical Lighter L3 orderbook snapshots (up to 250 orders per side each)')
-  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
-  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
-  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--account <index>', 'Only the orders owned by this Lighter account index')
-  .option('--limit <n>', 'Maximum records to return')
-  .option('--cursor <cursor>', 'Pagination cursor from previous response')
-  .option('--out <path>', 'Write JSON output to file')
-  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
-  .option('--format <format>', 'Output format: json or pretty', 'json')
-  .action(l3HistoryCommand);
+  group
+    .command('history')
+    .description('Get historical Lighter L3 orderbook snapshots (up to 250 orders per side each)')
+    .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
+    .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+    .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+    .option('--account <index>', 'Only the orders owned by this Lighter account index')
+    .option('--limit <n>', 'Maximum records to return')
+    .option('--cursor <cursor>', 'Pagination cursor from previous response')
+    .option('--out <path>', 'Write JSON output to file')
+    .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+    .option('--format <format>', 'Output format: json or pretty', 'json')
+    .action(l3HistoryCommand);
+}
+
+addL3Commands(program.command('l3').description(L3_DESC));
 
 // ── oxa outcomes (HIP-4 only) ───────────────────────────────────────────
 
@@ -805,7 +853,10 @@ outcomes
 
 const hip4 = program
   .command('hip4')
-  .description('HIP-4 outcome markets (binary prediction markets). Coins are bare numerics, e.g. "0", "1".');
+  .description(
+    'HIP-4 outcome markets (binary prediction markets). Coins are bare numerics, e.g. "0", "1". ' +
+      'Outcomes and questions live here; shared datatypes also take --exchange hip4.',
+  );
 
 const hip4Outcomes = hip4
   .command('outcomes')
@@ -898,6 +949,7 @@ hip4
   .option('--recent', 'Fetch the most recent trades (omit --start / --end)')
   .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--side <side>', SIDE_DESC)
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -979,6 +1031,7 @@ hip4Orders
   .option('--user <address>', 'Filter by user wallet address')
   .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
   .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
+  .option('--triggered <bool>', 'true keeps only trigger events; false leaves them out')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -1101,7 +1154,7 @@ stream
   .description(
     'Stream realtime trades for a symbol. Lighter trades arrive as two fills per trade (one per side, same tid).',
   )
-  .option('--exchange <exchange>', 'hyperliquid (default), hip3, lighter, rh-lighter, or spot')
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, hip4, spot, lighter, or rh-lighter')
   .option('--duration-ms <ms>', 'Auto-close after N milliseconds')
   .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -1113,7 +1166,7 @@ stream
   .description(
     'Stream realtime L2 orderbook updates for a symbol. Lighter (both deployments) sends a full top-20 book, at most one per second by default.',
   )
-  .option('--exchange <exchange>', 'hyperliquid (default), hip3, lighter, rh-lighter, or spot')
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, hip4, spot, lighter, or rh-lighter')
   .option(
     '--interval-ms <ms>',
     'Lighter and rh-lighter only: milliseconds between books, 100 to 5000 (default 1000). Each book is the newest full state.',
@@ -1124,26 +1177,17 @@ stream
   .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
   .action(streamOrderbookCommand);
 
-// Generic channel subscription. Use this for spot (spot_orderbook,
-// spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap), Lighter mainnet
-// (lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding),
-// Lighter on Robinhood Chain (the same four with an rh_ prefix), the
-// full-depth books (orderbook_full, hip3_orderbook_full), HIP-4 (hip4_trades,
-// hip4_l4_diffs, hip4_l4_orders) and any other raw WebSocket channel name not
-// covered by the dedicated verbs above. lighter_candles, lighter_l3_orderbook,
-// rh_lighter_candles, hip4_orderbook and hip4_open_interest are served from
-// stored data only and are rejected before a socket is opened.
+// Generic channel subscription by name. Which channels stream live is the
+// SDK's channel table (WS_CHANNEL_CAPABILITIES, which mirrors
+// /v1/capabilities); replay-only channels are refused before a socket opens.
 stream
   .command('subscribe <channel> <symbol>')
   .description(
-    'Subscribe to a raw WebSocket channel by name. ' +
-      'For spot: spot_orderbook, spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap. ' +
-      'Symbols are dashed canonical for spot (HYPE-USDC, PURR-USDC). ' +
-      'For Lighter: lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding; ' +
-      'for Lighter on Robinhood Chain: rh_lighter_orderbook, rh_lighter_trades, rh_lighter_open_interest, rh_lighter_funding ' +
-      '(lighter_candles, lighter_l3_orderbook, and rh_lighter_candles are replay-only). ' +
-      'Full-depth L2 books: orderbook_full, hip3_orderbook_full (an l4_snapshot with every level, then l4_batch changes). ' +
-      'HIP-4: hip4_trades, hip4_l4_diffs, hip4_l4_orders.',
+    'Subscribe to a live WebSocket channel by name: every channel `oxa capabilities` lists as live, ' +
+      'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_orderbook, spot_twap, lighter_funding, rh_lighter_trades. ' +
+      'Symbols are dashed canonical for spot (HYPE-USDC); HIP-4 coins are bare numerics. ' +
+      'Full-depth books (orderbook_full, hip3_orderbook_full) send an l4_snapshot with every level, then l4_batch changes. ' +
+      'Replay-only channels (candles, hip3_candles, lighter_candles, lighter_l3_orderbook, rh_lighter_candles) are refused.',
   )
   .option(
     '--interval-ms <ms>',
@@ -1158,12 +1202,14 @@ stream
 stream
   .command('replay <channel> <symbol>')
   .description(
-    'Replay stored data over WebSocket with its original timing, as NDJSON, until the replay completes. ' +
-      'Live-only channels (full-depth books, Spot, ticker, and HIP-3, HIP-4, and Spot L4) are refused before connecting.',
+    'Replay stored data over WebSocket, as NDJSON, until the replay completes: every channel `oxa capabilities` lists with replay. ' +
+      'Timed channels keep their original timing (scaled by --speed). L4 channels on every venue and the full-depth books ' +
+      '(orderbook_full, hip3_orderbook_full) replay in bulk: an l4_snapshot, then l4_batch pages, with --speed ignored. ' +
+      'Live-only channels (ticker, all_tickers, spot_orderbook, spot_trades, spot_twap) are refused before connecting.',
   )
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--speed <n>', 'Playback speed multiplier (default 1, real time); the plan sets the maximum')
+  .option('--speed <n>', 'Playback speed multiplier for timed channels (default 1, real time); the plan sets the maximum')
   .option('--interval <interval>', 'Candle channels only: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w')
   .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -1179,7 +1225,8 @@ const spot = program
   .command('spot')
   .description(
     'Hyperliquid Spot market data. Symbols are dashed canonical (HYPE-USDC, PURR-USDC). ' +
-      'No funding, OI, or liquidations. Candles are available from 2025-03-22.',
+      'No funding, OI, or liquidations. Candles are available from 2025-03-22. ' +
+      'Shared datatypes also take --exchange spot: orderbook, trades, candles, l4, orders history, freshness, and instruments.',
   );
 
 spot
@@ -1195,12 +1242,23 @@ spot
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotCandles);
 
-spot
+const spotPairs = spot
   .command('pairs')
+  .description('Spot pairs, the Spot instruments ("oxa spot pairs" lists them)');
+
+spotPairs
+  .command('list', { isDefault: true })
   .description('List every active spot pair (326 pairs)')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotPairsList);
+
+spotPairs
+  .command('get <symbol>')
+  .description('Get a specific spot pair (e.g. "oxa spot pairs get HYPE-USDC")')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotPairGet);
 
 spot
   .command('pair <symbol>')
@@ -1223,6 +1281,7 @@ spot
   .description('Fetch spot trade history (from 2025-03-22). Requires --start and --end.')
   .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--side <side>', SIDE_DESC)
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -1276,7 +1335,9 @@ spot
   .action(spotOrdersHistory);
 
 spot
-  .command('twap <symbol>')
+  .command('twap')
+  .description('Spot TWAP statuses ("oxa spot twap <symbol>" runs "oxa spot twap history <symbol>")')
+  .command('history <symbol>', { isDefault: true })
   .description('Get spot TWAP statuses for a pair (live from 2026-05-05)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
@@ -1438,23 +1499,38 @@ positions
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(accountHistoryCommand);
 
-// ── oxa accounts by-l1 (Lighter mainnet) ────────────────────────────────
+// ── oxa lighter accounts by-l1 (also: oxa accounts by-l1) ──────────────
 
-const accounts = program
-  .command('accounts')
-  .description('Lighter account lookup');
+const ACCOUNTS_DESC = 'Lighter account lookup';
 
-accounts
-  .command('by-l1')
-  .description('List the Lighter account indices owned by an L1 (Ethereum) address (Lighter mainnet)')
-  .requiredOption('--l1-address <address>', 'L1 address, 0x...')
-  .option('--exchange <exchange>', 'lighter (Lighter mainnet; the only deployment with this lookup)', 'lighter')
-  .option('--limit <n>', 'Maximum records to return')
-  .option('--cursor <cursor>', 'Pagination cursor from previous response')
-  .option('--out <path>', 'Write JSON output to file')
-  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
-  .option('--format <format>', 'Output format: json or pretty', 'json')
-  .action(accountsByL1Command);
+function addAccountsByL1(group: Command): void {
+  group
+    .command('by-l1')
+    .description('List the Lighter account indices owned by an L1 (Ethereum) address (Lighter mainnet)')
+    .requiredOption('--l1-address <address>', 'L1 address, 0x...')
+    .option('--exchange <exchange>', 'lighter (Lighter mainnet; the only deployment with this lookup)', 'lighter')
+    .option('--limit <n>', 'Maximum records to return')
+    .option('--cursor <cursor>', 'Pagination cursor from previous response')
+    .option('--out <path>', 'Write JSON output to file')
+    .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+    .option('--format <format>', 'Output format: json or pretty', 'json')
+    .action(accountsByL1Command);
+}
+
+addAccountsByL1(program.command('accounts').description(ACCOUNTS_DESC));
+
+// ── oxa lighter ... ─────────────────────────────────────────────────────
+// Lighter-only datatypes, under the venue: the L3 order book and the account
+// lookup, both on Lighter mainnet. Shared datatypes take --exchange lighter.
+
+const lighter = program
+  .command('lighter')
+  .description(
+    'Lighter-only datatypes: the L3 order book and the L1 account lookup (Lighter mainnet). Shared datatypes take --exchange lighter.',
+  );
+
+addL3Commands(lighter.command('l3').description(L3_DESC));
+addAccountsByL1(lighter.command('accounts').description(ACCOUNTS_DESC));
 
 // ── oxa wallets classify ────────────────────────────────────────────────
 

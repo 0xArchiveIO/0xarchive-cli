@@ -15,6 +15,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface OICurrentOptions {
@@ -99,7 +100,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
       interval: toSdkInterval(interval),
     });
     const records = result.data;
-    const envelope = { data: records, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, records);
 
     if (format === 'pretty') {
       prettyHeader(`${options.symbol} OI History (${exchange}) — ${records.length} records`);
@@ -119,9 +120,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
         if (records.length > 20) {
           prettyDim(`... and ${records.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

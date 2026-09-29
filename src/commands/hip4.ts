@@ -63,6 +63,7 @@ export async function hip4Trades(
     end?: string;
     limit?: string;
     cursor?: string;
+    side?: string;
     out?: string;
     recent?: boolean;
   },
@@ -147,6 +148,7 @@ export async function hip4OrdersHistory(
     user?: string;
     status?: string;
     orderType?: string;
+    triggered?: string;
     limit?: string;
     cursor?: string;
     out?: string;
@@ -279,7 +281,7 @@ export async function hip4QuestionsList(options: {
       }
       const shown = questions.slice(0, 20);
       prettyTable(['Question', 'Name', 'Named Outcomes', 'Fallback', 'Settled', 'Description'], shown.map(questionRow));
-      printMore(shown.length, questions.length, page.nextCursor);
+      printMore(shown.length, questions.length, page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {

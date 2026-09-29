@@ -157,21 +157,21 @@ describe('new analytics commands', () => {
         limit: 500,
         cursor: 'abc',
       });
-      expect(stdoutJson()).toEqual({ data: [BREADTH], nextCursor: '1790566920000' });
+      expect(stdoutJson()).toEqual({ data: [BREADTH], nextCursor: '1790566920000', has_more: true });
     });
 
     it('sends only the flags given', async () => {
       sdk.state.clients.hyperliquid.hip3.breadth!.history.mockResolvedValue({ data: [], nextCursor: undefined });
       expect(await runCli('breadth', 'history', '--exchange', 'hip3')).toBe(0);
       expect(sdk.state.clients.hyperliquid.hip3.breadth!.history).toHaveBeenCalledWith({});
-      expect(stdoutJson()).toEqual({ data: [], nextCursor: null });
+      expect(stdoutJson()).toEqual({ data: [], nextCursor: null, has_more: false });
     });
 
     it('writes history to --out and prints a summary', async () => {
       const out = join(dir, 'breadth.json');
       sdk.state.clients.hyperliquid.hip3.breadth!.history.mockResolvedValue({ data: [BREADTH], nextCursor: 'next' });
       expect(await runCli('breadth', 'history', '--exchange', 'hip3', '--out', out)).toBe(0);
-      expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ data: [BREADTH], nextCursor: 'next' });
+      expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ data: [BREADTH], nextCursor: 'next', has_more: true });
       expect(stdoutJson()).toEqual({
         written_to: out,
         records: 1,
@@ -231,6 +231,7 @@ describe('new analytics commands', () => {
       expect(stdoutJson()).toEqual({
         data: [BUCKET],
         nextCursor: '1790650800000',
+        has_more: true,
         meta: { notice: 'cumulative_delta runs from the first bucket of this page' },
       });
     });
@@ -239,7 +240,7 @@ describe('new analytics commands', () => {
       sdk.state.clients.hyperliquid.hip3.cvd!.history.mockResolvedValue({ data: [], nextCursor: undefined });
       expect(await runCli('cvd', 'km:US500', '--exchange', 'hip3', '--interval', '1w')).toBe(0);
       expect(sdk.state.clients.hyperliquid.hip3.cvd!.history).toHaveBeenCalledWith('km:US500', { interval: '1w' });
-      expect(stdoutJson()).toEqual({ data: [], nextCursor: null });
+      expect(stdoutJson()).toEqual({ data: [], nextCursor: null, has_more: false });
     });
 
     it('prints buckets in UTC and says the running total restarts per page', async () => {
@@ -321,7 +322,7 @@ describe('new analytics commands', () => {
       sdk.state.clients.hyperliquid.hip4.questions.list.mockResolvedValue({ data: [QUESTION], nextCursor: '1' });
       expect(await runCli('hip4', 'questions', 'list', '--limit', '2', '--cursor', '0')).toBe(0);
       expect(sdk.state.clients.hyperliquid.hip4.questions.list).toHaveBeenCalledWith({ limit: 2, cursor: '0' });
-      expect(stdoutJson()).toEqual({ data: [QUESTION], nextCursor: '1' });
+      expect(stdoutJson()).toEqual({ data: [QUESTION], nextCursor: '1', has_more: true });
     });
 
     it('gets one question by id', async () => {
@@ -514,6 +515,7 @@ describe('new analytics commands', () => {
       expect(stdoutJson()).toEqual({
         data: [{ snapshotTs: '2026-09-01 00:00:00.000', midPrice: 1 }],
         nextCursor: '1790000000000',
+        has_more: true,
       });
     });
 
@@ -829,7 +831,7 @@ describe('new analytics commands', () => {
       );
       expect(code).toBe(0);
       expect(l4[method]).toHaveBeenCalledWith('HYPE-USDC', { start: START_MS, end: END_MS, limit: 100, cursor: 'c1' });
-      expect(stdoutJson()).toEqual({ data: [{ seq: 1 }], nextCursor: 'next' });
+      expect(stdoutJson()).toEqual({ data: [{ seq: 1 }], nextCursor: 'next', has_more: true });
     });
 
     it('writes --out and refuses a reversed window', async () => {
@@ -838,7 +840,7 @@ describe('new analytics commands', () => {
         const out = join(dir, 'diffs.json');
         sdk.state.clients.spot.l4Orderbook.diffs.mockResolvedValue({ data: [], nextCursor: undefined });
         expect(await runCli('spot', 'l4-diffs', 'HYPE-USDC', '--start', START, '--end', END, '--out', out)).toBe(0);
-        expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ data: [], nextCursor: null });
+        expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ data: [], nextCursor: null, has_more: false });
         expect(stdoutJson()).toMatchObject({ written_to: out, records: 0, exchange: 'spot', symbol: 'HYPE-USDC', has_more: false });
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -921,7 +923,6 @@ describe('new analytics commands', () => {
 
   describe('flags the API ignores are gone', () => {
     it.each([
-      [['l2', 'history', '--exchange', 'hyperliquid', '--symbol', 'BTC', '--start', START, '--end', END, '--depth', '5'], '--depth'],
       [['l3', 'history', '--symbol', 'BTC', '--start', START, '--end', END, '--depth', '5'], '--depth'],
       [['spot', 'orders', 'HYPE-USDC', '--start', START, '--end', END, '--user', '0xabc'], '--user'],
       [['spot', 'orders', 'HYPE-USDC', '--start', START, '--end', END, '--status', 'open'], '--status'],
