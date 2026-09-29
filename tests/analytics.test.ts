@@ -9,7 +9,6 @@ import { captureIo, lastError, runCli, stdoutJson, stdoutText, stderrText } from
 // the flags this release removes. Each test parses a real argument vector with
 // the command tree and checks the SDK call and the output.
 const sdk = vi.hoisted(() => {
-  const HTTP = { sentinel: 'sdk-http-client' };
   const venue = () => ({
     breadth: { current: vi.fn(), history: vi.fn() } as Record<string, any> | undefined,
     cvd: { history: vi.fn() } as Record<string, any> | undefined,
@@ -19,36 +18,40 @@ const sdk = vi.hoisted(() => {
     l2Orderbook: { history: vi.fn() },
     oracle: { externalPrice: vi.fn(), discoveryBounds: vi.fn() },
   });
-  const fresh = () => {
-    const core = venue();
-    // Hyperliquid core breadth comes from the SDK's breadth resource class
-    // bound to the core route family, unless the client carries its own.
-    core.breadth = undefined;
-    return {
-      hyperliquid: {
-        ...core,
-        hip3: venue(),
-        hip4: { questions: { list: vi.fn(), get: vi.fn() } },
+  const fresh = () => ({
+    hyperliquid: {
+      ...venue(),
+      hip3: venue(),
+      hip4: {
+        questions: { list: vi.fn(), get: vi.fn() },
+        outcomes: { getBySlug: vi.fn() } as Record<string, any>,
       },
-      lighter: { l3Orderbook: { get: vi.fn(), history: vi.fn() } },
-      spot: { orders: { history: vi.fn() }, trades: { list: vi.fn() } },
-      symbols: { list: vi.fn() } as Record<string, any> | undefined,
-    };
-  };
-  const state = {
-    clients: fresh(),
-    apiKeys: [] as string[],
-    coreBreadth: { current: vi.fn(), history: vi.fn() },
-    breadthResources: [] as Array<{ http: unknown; basePath: string }>,
-  };
+    },
+    lighter: { l3Orderbook: { get: vi.fn(), history: vi.fn() } },
+    spot: {
+      orders: { history: vi.fn() },
+      trades: { list: vi.fn() },
+      l4Orderbook: { get: vi.fn(), diffs: vi.fn(), history: vi.fn() },
+    },
+    symbols: { list: vi.fn() } as Record<string, any> | undefined,
+    dataQuality: {
+      status: vi.fn(),
+      coverage: vi.fn(),
+      exchangeCoverage: vi.fn(),
+      symbolCoverage: vi.fn(),
+      listIncidents: vi.fn(),
+      getIncident: vi.fn(),
+      latency: vi.fn(),
+      sla: vi.fn(),
+      positionsFreshness: vi.fn(),
+    } as Record<string, any>,
+  });
+  const state = { clients: fresh(), apiKeys: [] as string[] };
   return {
-    HTTP,
     state,
     reset() {
       state.clients = fresh();
       state.apiKeys = [];
-      state.coreBreadth = { current: vi.fn(), history: vi.fn() };
-      state.breadthResources = [];
     },
   };
 });
@@ -56,7 +59,6 @@ const sdk = vi.hoisted(() => {
 vi.mock('@0xarchive/sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@0xarchive/sdk')>();
   class OxArchive {
-    http = sdk.HTTP;
     constructor(options: { apiKey: string }) {
       sdk.state.apiKeys.push(options.apiKey);
     }
@@ -72,19 +74,11 @@ vi.mock('@0xarchive/sdk', async (importOriginal) => {
     get symbols() {
       return sdk.state.clients.symbols;
     }
-  }
-  class Hip3BreadthResource {
-    constructor(http: unknown, basePath: string) {
-      sdk.state.breadthResources.push({ http, basePath });
-    }
-    current() {
-      return sdk.state.coreBreadth.current();
-    }
-    history(params: unknown) {
-      return sdk.state.coreBreadth.history(params);
+    get dataQuality() {
+      return sdk.state.clients.dataQuality;
     }
   }
-  return { ...actual, OxArchive, Hip3BreadthResource };
+  return { ...actual, OxArchive };
 });
 
 const BREADTH = {
@@ -141,29 +135,22 @@ describe('new analytics commands', () => {
       expect(stdoutText()).not.toContain('Value %: 0');
     });
 
-    it('reads Hyperliquid core breadth through the SDK breadth resource bound to the core routes', async () => {
-      sdk.state.coreBreadth.current.mockResolvedValue({ ...BREADTH, valuePct: 60.8 });
+    it('reads Hyperliquid core breadth from the core client', async () => {
+      sdk.state.clients.hyperliquid.breadth!.current.mockResolvedValue({ ...BREADTH, valuePct: 60.8 });
       expect(await runCli('breadth', 'current', '--exchange', 'hyperliquid')).toBe(0);
-      expect(sdk.state.breadthResources).toEqual([{ http: sdk.HTTP, basePath: '/v1/hyperliquid' }]);
+      expect(sdk.state.clients.hyperliquid.breadth!.current).toHaveBeenCalledWith();
+      expect(sdk.state.clients.hyperliquid.hip3.breadth!.current).not.toHaveBeenCalled();
       expect(stdoutJson().valuePct).toBe(60.8);
     });
 
-    it('uses a core breadth resource on the client when the SDK has one', async () => {
-      const own = { current: vi.fn().mockResolvedValue(BREADTH), history: vi.fn() };
-      (sdk.state.clients.hyperliquid as any).breadth = own;
-      expect(await runCli('breadth', 'current', '--exchange', 'hyperliquid')).toBe(0);
-      expect(own.current).toHaveBeenCalled();
-      expect(sdk.state.breadthResources).toEqual([]);
-    });
-
     it('pages history with the window, interval, limit, and cursor', async () => {
-      sdk.state.coreBreadth.history.mockResolvedValue({ data: [BREADTH], nextCursor: '1790566920000' });
+      sdk.state.clients.hyperliquid.breadth!.history.mockResolvedValue({ data: [BREADTH], nextCursor: '1790566920000' });
       const code = await runCli(
         'breadth', 'history', '--exchange', 'hyperliquid',
         '--start', START, '--end', END, '--interval', '1h', '--limit', '500', '--cursor', 'abc',
       );
       expect(code).toBe(0);
-      expect(sdk.state.coreBreadth.history).toHaveBeenCalledWith({
+      expect(sdk.state.clients.hyperliquid.breadth!.history).toHaveBeenCalledWith({
         start: START_MS,
         end: END_MS,
         interval: '1h',
@@ -204,14 +191,18 @@ describe('new analytics commands', () => {
       expect(await runCli('breadth', 'history', ...flags)).toBe(2);
       expect(lastError()).toEqual({ error: message, code: 2, type: 'validation' });
       expect(sdk.state.clients.hyperliquid.hip3.breadth!.history).not.toHaveBeenCalled();
-      expect(sdk.state.coreBreadth.history).not.toHaveBeenCalled();
+      expect(sdk.state.clients.hyperliquid.breadth!.history).not.toHaveBeenCalled();
     });
 
-    it('names the SDK floor when the installed SDK has no HIP-3 breadth', async () => {
-      sdk.state.clients.hyperliquid.hip3.breadth = undefined;
-      expect(await runCli('breadth', 'current', '--exchange', 'hip3')).toBe(5);
+    it.each([
+      ['hip3', 'Hyperliquid HIP-3'],
+      ['hyperliquid', 'Hyperliquid'],
+    ])('names the SDK floor when the installed SDK has no %s breadth', async (exchange, label) => {
+      if (exchange === 'hip3') sdk.state.clients.hyperliquid.hip3.breadth = undefined;
+      else sdk.state.clients.hyperliquid.breadth = undefined;
+      expect(await runCli('breadth', 'current', '--exchange', exchange)).toBe(5);
       expect(lastError().error).toBe(
-        'Support for Hyperliquid HIP-3 breadth requires @0xarchive/sdk 1.12.0 or newer. Reinstall @0xarchive/cli to pick it up.',
+        `Support for ${label} breadth requires @0xarchive/sdk 1.12.0 or newer. Reinstall @0xarchive/cli to pick it up.`,
       );
     });
   });
@@ -631,6 +622,269 @@ describe('new analytics commands', () => {
     });
   });
 
+  describe('oxa data-quality', () => {
+    const dq = () => sdk.state.clients.dataQuality;
+
+    it('prints the platform status', async () => {
+      const status = {
+        status: 'degraded',
+        updatedAt: '2026-09-29T04:25:00Z',
+        exchanges: { hyperliquid: { status: 'operational', lastDataAt: '2026-09-29T04:25:00Z', latencyMs: 381 } },
+        dataTypes: { funding: { status: 'degraded', completeness24h: 99 } },
+        activeIncidents: 0,
+      };
+      dq().status.mockResolvedValue(status);
+      expect(await runCli('data-quality', 'status')).toBe(0);
+      expect(dq().status).toHaveBeenCalledWith();
+      expect(stdoutJson()).toEqual(status);
+
+      vi.mocked(process.stdout.write).mockClear();
+      expect(await runCli('data-quality', 'status', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).toContain('Data Quality Status: degraded');
+      expect(stdoutText()).toMatch(/hyperliquid\s+operational\s+2026-09-29T04:25:00Z\s+381/);
+      expect(stdoutText()).toMatch(/funding\s+degraded\s+99/);
+    });
+
+    it('reads coverage for every venue, one venue, or one symbol', async () => {
+      const all = { exchanges: [{ exchange: 'hip3', dataTypes: { orderbook: { earliest: 'a', latest: 'b', totalRecords: 5, symbols: 2, completeness: 100 } } }] };
+      dq().coverage.mockResolvedValue(all);
+      expect(await runCli('data-quality', 'coverage')).toBe(0);
+      expect(dq().coverage).toHaveBeenCalledWith();
+      expect(stdoutJson()).toEqual(all);
+
+      dq().exchangeCoverage.mockResolvedValue(all.exchanges[0]);
+      expect(await runCli('data-quality', 'coverage', '--exchange', 'hip3', '--format', 'pretty')).toBe(0);
+      expect(dq().exchangeCoverage).toHaveBeenCalledWith('hip3');
+      expect(stdoutText()).toMatch(/hip3\s+orderbook\s+a\s+b\s+5\s+2\s+100/);
+
+      dq().symbolCoverage.mockResolvedValue({ exchange: 'hip3', symbol: 'km:US500', dataTypes: {} });
+      expect(await runCli('data-quality', 'coverage', '--exchange', 'hip3', '--symbol', 'km:US500')).toBe(0);
+      expect(dq().symbolCoverage).toHaveBeenLastCalledWith('hip3', 'km:US500', undefined);
+
+      expect(
+        await runCli('data-quality', 'coverage', '--exchange', 'hip4', '--symbol', '#0', '--from', START, '--to', END),
+      ).toBe(0);
+      expect(dq().symbolCoverage).toHaveBeenLastCalledWith('hip4', '#0', { from: START_MS, to: END_MS });
+    });
+
+    it('prints gap counts and cadence for one symbol', async () => {
+      dq().symbolCoverage.mockResolvedValue({
+        exchange: 'hyperliquid',
+        symbol: 'BTC',
+        dataTypes: {
+          orderbook: {
+            earliest: '2023-04-15T00:00:07Z',
+            latest: '2026-09-29T04:25:01Z',
+            totalRecords: 195276209,
+            completeness: 100,
+            historicalCoverage: 98.4,
+            gaps: [{ start: 'x', end: 'y', durationMinutes: 3 }],
+            cadence: { medianIntervalSeconds: 1, p95IntervalSeconds: 1, sampleCount: 83204 },
+          },
+        },
+      });
+      expect(await runCli('data-quality', 'coverage', '--exchange', 'hyperliquid', '--symbol', 'BTC', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).toMatch(/orderbook\s+2023-04-15T00:00:07Z\s+2026-09-29T04:25:01Z\s+195276209\s+100\s+98\.4\s+1\s+1/);
+    });
+
+    it.each([
+      [['--symbol', 'BTC'], /^--symbol needs --exchange/],
+      [['--exchange', 'hyperliquid', '--from', START], /^--from and --to bound the gap search of one symbol/],
+      [['--exchange', 'binance'], /^Invalid --exchange "binance"/],
+      [['--exchange', 'hyperliquid', '--symbol', 'BTC', '--from', END, '--to', START], /^--from must be before --to$/],
+    ])('refuses coverage %j before any request', async (flags, message) => {
+      expect(await runCli('data-quality', 'coverage', ...flags)).toBe(2);
+      expect(lastError().error).toMatch(message);
+      expect(dq().coverage).not.toHaveBeenCalled();
+      expect(dq().exchangeCoverage).not.toHaveBeenCalled();
+      expect(dq().symbolCoverage).not.toHaveBeenCalled();
+    });
+
+    it('lists incidents with filters and offset paging', async () => {
+      const result = {
+        incidents: [{ id: 'INC-2026-001', status: 'resolved', severity: 'major', exchange: 'lighter', title: 'Upstream outage', startedAt: 's' }],
+        pagination: { total: 3, limit: 1, offset: 0 },
+      };
+      dq().listIncidents.mockResolvedValue(result);
+      const code = await runCli(
+        'data-quality', 'incidents', '--status', 'resolved', '--exchange', 'lighter', '--since', START,
+        '--limit', '1', '--offset', '0',
+      );
+      expect(code).toBe(0);
+      expect(dq().listIncidents).toHaveBeenCalledWith({
+        status: 'resolved',
+        exchange: 'lighter',
+        since: START_MS,
+        limit: 1,
+        offset: 0,
+      });
+      expect(stdoutJson()).toEqual(result);
+
+      vi.mocked(process.stdout.write).mockClear();
+      expect(await runCli('data-quality', 'incidents', '--format', 'pretty')).toBe(0);
+      expect(dq().listIncidents).toHaveBeenLastCalledWith(undefined);
+      expect(stdoutText()).toContain('Data Quality Incidents, 1 of 3');
+      expect(stdoutText()).toContain('More incidents match (use --offset 1 to page)');
+    });
+
+    it.each([
+      [['--status', 'closed'], /^Invalid --status "closed"\. Must be open, investigating, identified, monitoring, or resolved\.$/],
+      [['--limit', '101'], /^--limit must be a whole number from 1 to 100 \(got 101\)$/],
+      [['--offset', '-1'], /^--offset must be a non-negative whole number \(got -1\)$/],
+    ])('refuses incidents %j before any request', async (flags, message) => {
+      expect(await runCli('data-quality', 'incidents', ...flags)).toBe(2);
+      expect(lastError().error).toMatch(message);
+      expect(dq().listIncidents).not.toHaveBeenCalled();
+    });
+
+    it('gets one incident', async () => {
+      const incident = { id: 'INC-2026-001', status: 'resolved', severity: 'major', title: 'Upstream outage', rootCause: 'Venue outage' };
+      dq().getIncident.mockResolvedValue(incident);
+      expect(await runCli('data-quality', 'incident', 'INC-2026-001', '--format', 'pretty')).toBe(0);
+      expect(dq().getIncident).toHaveBeenCalledWith('INC-2026-001');
+      expect(stdoutText()).toContain('Root cause: Venue outage');
+    });
+
+    it('prints latency per venue', async () => {
+      dq().latency.mockResolvedValue({
+        measuredAt: 'now',
+        exchanges: {
+          hyperliquid: {
+            websocket: { currentMs: 470 },
+            restApi: { currentMs: 66, avg1hMs: 40 },
+            dataFreshness: { orderbookLagMs: 470, fillsLagMs: 41914 },
+          },
+        },
+      });
+      expect(await runCli('data-quality', 'latency', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).toMatch(/hyperliquid\s+470\s+66\s+40\s+470\s+41914\s+-\s+-/);
+    });
+
+    it('reads SLA for a month', async () => {
+      const sla = {
+        period: '2026-08',
+        slaTargets: { uptime: 99.9, dataCompleteness: 99.5, apiLatencyP99Ms: 500 },
+        actual: {
+          uptime: 100,
+          uptimeStatus: 'met',
+          dataCompleteness: { orderbook: 99, funding: 99, overall: 99.6 },
+          completenessStatus: 'met',
+          apiLatencyP99Ms: 279,
+          latencyStatus: 'met',
+        },
+        incidentsThisPeriod: 0,
+        totalDowntimeMinutes: 0,
+      };
+      dq().sla.mockResolvedValue(sla);
+      expect(await runCli('data-quality', 'sla', '--year', '2026', '--month', '8', '--format', 'pretty')).toBe(0);
+      expect(dq().sla).toHaveBeenCalledWith({ year: 2026, month: 8 });
+      expect(stdoutText()).toContain('Uptime: 100% against 99.9% (met)');
+      expect(stdoutText()).toContain('API latency p99: 279 ms against 500 ms (met)');
+
+      expect(await runCli('data-quality', 'sla')).toBe(0);
+      expect(dq().sla).toHaveBeenLastCalledWith(undefined);
+      expect(await runCli('data-quality', 'sla', '--month', '13')).toBe(2);
+      expect(lastError().error).toBe('--month must be a whole number from 1 to 12 (got 13)');
+    });
+
+    it('reads positions freshness per venue', async () => {
+      const venues = [
+        {
+          venue: 'hyperliquid',
+          product: 'core',
+          liveSnapshotTs: '2026-09-29T04:22:28Z',
+          liveAgeSeconds: 161,
+          stale: false,
+          liveQuality: 'complete',
+          hourlySnapshotTs: '2026-09-29T04:00:00Z',
+          builtThrough: '2026-09-29T04:00:00Z',
+          finalizedThrough: null,
+        },
+      ];
+      dq().positionsFreshness.mockResolvedValue(venues);
+      expect(await runCli('data-quality', 'positions-freshness')).toBe(0);
+      expect(stdoutJson()).toEqual(venues);
+
+      vi.mocked(process.stdout.write).mockClear();
+      expect(await runCli('data-quality', 'positions-freshness', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).toMatch(/hyperliquid\s+core\s+2026-09-29T04:22:28Z\s+161\s+no\s+complete/);
+    });
+
+    it('names the SDK floor when positions freshness is missing', async () => {
+      delete dq().positionsFreshness;
+      expect(await runCli('data-quality', 'positions-freshness')).toBe(5);
+      expect(lastError().error).toMatch(/^Support for positions freshness requires @0xarchive\/sdk 1\.12\.0 or newer/);
+    });
+  });
+
+  describe('oxa spot l4-diffs and l4-history', () => {
+    it.each([
+      ['l4-diffs', 'diffs'],
+      ['l4-history', 'history'],
+    ])('%s pages the Spot L4 %s', async (command, method) => {
+      const l4 = sdk.state.clients.spot.l4Orderbook as Record<string, any>;
+      l4[method].mockResolvedValue({ data: [{ seq: 1 }], nextCursor: 'next' });
+      const code = await runCli(
+        'spot', command, 'HYPE-USDC', '--start', START, '--end', END, '--limit', '100', '--cursor', 'c1',
+      );
+      expect(code).toBe(0);
+      expect(l4[method]).toHaveBeenCalledWith('HYPE-USDC', { start: START_MS, end: END_MS, limit: 100, cursor: 'c1' });
+      expect(stdoutJson()).toEqual({ data: [{ seq: 1 }], nextCursor: 'next' });
+    });
+
+    it('writes --out and refuses a reversed window', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'oxa-spot-l4-'));
+      try {
+        const out = join(dir, 'diffs.json');
+        sdk.state.clients.spot.l4Orderbook.diffs.mockResolvedValue({ data: [], nextCursor: undefined });
+        expect(await runCli('spot', 'l4-diffs', 'HYPE-USDC', '--start', START, '--end', END, '--out', out)).toBe(0);
+        expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ data: [], nextCursor: null });
+        expect(stdoutJson()).toMatchObject({ written_to: out, records: 0, exchange: 'spot', symbol: 'HYPE-USDC', has_more: false });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+      expect(await runCli('spot', 'l4-history', 'HYPE-USDC', '--start', END, '--end', START)).toBe(2);
+      expect(lastError().error).toBe('--start must be before --end');
+      expect(sdk.state.clients.spot.l4Orderbook.history).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('HIP-4 outcome by slug', () => {
+    const OUTCOME = {
+      outcomeId: 104,
+      name: 'June Fed rate change',
+      sideSpecs: [
+        { side: 0, name: 'Change', coin: '#1040', slug: 'june-fed-rate-change-change' },
+        { side: 1, name: 'No Change', coin: '#1041', slug: 'june-fed-rate-change-no change' },
+      ],
+    };
+
+    it.each([
+      [['hip4', 'outcomes', 'by-slug'], 'btc-above-78213-may-03-0600', 'btc-above-78213-may-03-0600'],
+      [['outcomes', 'by-slug'], 'eth-above-1863.4-yes-aug-05-0600', 'eth-above-1863.4-yes-aug-05-0600'],
+      [['hip4', 'outcomes', 'by-slug'], 'june-fed-rate-change-no change', 'june-fed-rate-change-no%20change'],
+      [['hip4', 'outcomes', 'by-slug'], 'template-pricetouch-template:yes', 'template-pricetouch-template%3Ayes'],
+    ])('%j %s looks the outcome up by its encoded slug', async (command, slug, sent) => {
+      sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug.mockResolvedValue(OUTCOME);
+      expect(await runCli(...command, slug)).toBe(0);
+      expect(sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug).toHaveBeenCalledWith(sent);
+      expect(stdoutJson()).toEqual(OUTCOME);
+    });
+
+    it('prints both sides with their slugs', async () => {
+      sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug.mockResolvedValue(OUTCOME);
+      expect(await runCli('hip4', 'outcomes', 'by-slug', 'june-fed-rate-change-change', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).toContain('HIP-4 Outcome 104');
+      expect(stdoutText()).toMatch(/1\s+No Change\s+#1041\s+june-fed-rate-change-no change/);
+    });
+
+    it('refuses an empty slug', async () => {
+      expect(await runCli('hip4', 'outcomes', 'by-slug', ' ')).toBe(2);
+      expect(lastError().error).toBe('A slug is required, e.g. btc-above-78213-may-03-0600.');
+      expect(sdk.state.clients.hyperliquid.hip4.outcomes.getBySlug).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Lighter L3 --account', () => {
     it('filters the snapshot and the history to one account index', async () => {
       sdk.state.clients.lighter.l3Orderbook.get.mockResolvedValue({ orders: [] });
@@ -643,6 +897,14 @@ describe('new analytics commands', () => {
         end: END_MS,
         account: 0,
       });
+    });
+
+    it('reads a historical snapshot with --timestamp', async () => {
+      sdk.state.clients.lighter.l3Orderbook.get.mockResolvedValue({ orders: [] });
+      expect(await runCli('l3', 'get', '--symbol', 'BTC', '--timestamp', START, '--account', '5')).toBe(0);
+      expect(sdk.state.clients.lighter.l3Orderbook.get).toHaveBeenCalledWith('BTC', { timestamp: START_MS, account: 5 });
+      expect(await runCli('l3', 'get', '--symbol', 'BTC', '--timestamp', 'yesterday')).toBe(2);
+      expect(lastError().error).toBe('--timestamp must be a valid ISO date or Unix timestamp (ms)');
     });
 
     it('sends no params when no filter is given', async () => {

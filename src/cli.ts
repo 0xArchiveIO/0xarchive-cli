@@ -26,7 +26,7 @@ import {
 import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './commands/l4.js';
 import { l2GetCommand, l2HistoryCommand, l2DiffsCommand } from './commands/l2.js';
 import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
-import { outcomesListCommand, outcomesGetCommand } from './commands/outcomes.js';
+import { outcomesListCommand, outcomesGetCommand, outcomesBySlugCommand } from './commands/outcomes.js';
 import {
   hip4OrderbookGet,
   hip4OrderbookHistory,
@@ -54,6 +54,16 @@ import { breadthCurrentCommand, breadthHistoryCommand } from './commands/breadth
 import { cvdCommand } from './commands/cvd.js';
 import { walletsClassifyCommand, WALLET_SORTS } from './commands/wallets.js';
 import { symbolsCommand } from './commands/symbols.js';
+import {
+  dataQualityStatusCommand,
+  dataQualityCoverageCommand,
+  dataQualityIncidentsCommand,
+  dataQualityIncidentCommand,
+  dataQualityLatencyCommand,
+  dataQualitySlaCommand,
+  dataQualityPositionsFreshnessCommand,
+  INCIDENT_STATUSES,
+} from './commands/data-quality.js';
 import { streamReplayCommand } from './commands/replay.js';
 import {
   webhooksEventTypesCommand,
@@ -92,6 +102,8 @@ import {
   spotOrderbookGet,
   spotTrades,
   spotL4Get,
+  spotL4Diffs,
+  spotL4History,
   spotOrdersHistory,
   spotTwapBySymbol,
   spotTwapByUser,
@@ -481,6 +493,72 @@ program
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(freshnessCommand);
 
+// ── oxa data-quality ... ────────────────────────────────────────────────
+
+const dataQuality = program
+  .command('data-quality')
+  .description('Data quality: platform status, coverage and gaps, incidents, latency, SLA, and positions freshness');
+
+dataQuality
+  .command('status')
+  .description('Overall status, with status and latency per venue and 24h completeness per data type')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityStatusCommand);
+
+dataQuality
+  .command('coverage')
+  .description('Coverage for every venue, one venue (--exchange), or one symbol with gaps and cadence (--exchange and --symbol)')
+  .option('--exchange <exchange>', 'hyperliquid, hip3, hip4, spot, lighter, or rh-lighter')
+  .option('--symbol <symbol>', 'Symbol as the venue names it (BTC, km:US500, HYPE-USDC, #0); needs --exchange')
+  .option('--from <time>', 'With --symbol: start of the gap search (ISO 8601 or Unix ms); default 30 days ago')
+  .option('--to <time>', 'With --symbol: end of the gap search (ISO 8601 or Unix ms); default now')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityCoverageCommand);
+
+dataQuality
+  .command('incidents')
+  .description('List data incidents, newest first, with offset paging')
+  .option('--status <status>', `Filter by status: ${INCIDENT_STATUSES.join(', ')}`)
+  .option('--exchange <exchange>', 'Filter by venue: hyperliquid, hip3, hip4, spot, lighter, or rh-lighter')
+  .option('--since <time>', 'Only incidents that started after this time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Incidents per page, 1 to 100 (default 20)')
+  .option('--offset <n>', 'Page offset (default 0)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityIncidentsCommand);
+
+dataQuality
+  .command('incident <incident_id>')
+  .description('Get one incident with its root cause, resolution, and records affected and recovered')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityIncidentCommand);
+
+dataQuality
+  .command('latency')
+  .description('Current WebSocket and REST latency and data lag per venue')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityLatencyCommand);
+
+dataQuality
+  .command('sla')
+  .description('SLA targets and actual uptime, completeness, and p99 latency for one month (default the current month)')
+  .option('--year <yyyy>', 'Year')
+  .option('--month <m>', 'Month, 1 to 12')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualitySlaCommand);
+
+dataQuality
+  .command('positions-freshness')
+  .description('Freshness of the account positions data per venue: live and hourly snapshots, staleness, built and finalized through')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(dataQualityPositionsFreshnessCommand);
+
 // ── oxa orders history / flow / tpsl ────────────────────────────────────
 
 const orders = program
@@ -667,6 +745,7 @@ l3
   .command('get')
   .description('Get Lighter L3 orderbook snapshot')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
+  .option('--timestamp <time>', 'Historical snapshot time (ISO 8601 or Unix ms); latest when omitted')
   .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
   .option('--account <index>', 'Only the orders owned by this Lighter account index')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
@@ -712,6 +791,13 @@ outcomes
     outcomesGetCommand({ outcomeId, ...options }),
   );
 
+outcomes
+  .command('by-slug <slug>')
+  .description('Get a HIP-4 outcome market by its outcome slug or either side\'s slug (includes aggregatedOi)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(outcomesBySlugCommand);
+
 // ── oxa hip4 ────────────────────────────────────────────────────────────
 // Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`).
 // HIP-4 has no funding or liquidations by design; candles and per-side OI are
@@ -743,6 +829,13 @@ hip4Outcomes
   .action((outcomeId: string, options: { apiKey?: string; format: string }) =>
     hip4OutcomesGet(outcomeId, options),
   );
+
+hip4Outcomes
+  .command('by-slug <slug>')
+  .description('Get a HIP-4 outcome market by its outcome slug or either side\'s slug (includes aggregatedOi)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(outcomesBySlugCommand);
 
 const hip4Questions = hip4
   .command('questions')
@@ -1145,6 +1238,30 @@ spot
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotL4Get);
+
+spot
+  .command('l4-diffs <symbol>')
+  .description('Get spot L4 orderbook diffs over a time range (live from 2026-05-05)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotL4Diffs);
+
+spot
+  .command('l4-history <symbol>')
+  .description('Get spot L4 orderbook checkpoints over a time range (live from 2026-05-05)')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--limit <n>', 'Maximum records to return')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(spotL4History);
 
 spot
   .command('orders <symbol>')

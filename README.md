@@ -446,6 +446,32 @@ Check data freshness across all data types for a symbol.
 oxa freshness --exchange <exchange> --symbol <symbol> [--format <format>]
 ```
 
+### `oxa data-quality ...`
+
+Platform status, coverage, incidents, latency, and SLA compliance, and the freshness of the account positions data.
+
+```bash
+oxa data-quality status --format pretty
+oxa data-quality coverage
+oxa data-quality coverage --exchange hip3
+oxa data-quality coverage --exchange hyperliquid --symbol BTC --from 2026-09-01T00:00:00Z --to 2026-09-08T00:00:00Z
+oxa data-quality incidents --status resolved --exchange lighter --limit 20
+oxa data-quality incident <incident_id>
+oxa data-quality latency --format pretty
+oxa data-quality sla --year 2026 --month 8
+oxa data-quality positions-freshness --format pretty
+```
+
+| Subcommand | Description |
+|---|---|
+| `oxa data-quality status` | Overall status (`operational`, `degraded`, `outage`, or `maintenance`), each venue's status, last data time, and latency, each data type's 24-hour completeness, and the number of active incidents. |
+| `oxa data-quality coverage` | Earliest and latest data, record counts, symbol counts, and completeness per data type for every venue. `--exchange` narrows it to one venue (`hyperliquid`, `hip3`, `hip4`, `spot`, `lighter`, or `rh-lighter`). With `--exchange` and `--symbol`, one symbol's coverage per data type with its gaps, cadence (median and p95 interval), and hour-level historical coverage; `--from` and `--to` bound the gap search (default the last 30 days). Symbols are named as the venue names them: `BTC`, `km:US500`, `HYPE-USDC`, `#0`. |
+| `oxa data-quality incidents` | Data incidents, newest first. Filters: `--status` (`open`, `investigating`, `identified`, `monitoring`, `resolved`), `--exchange`, and `--since`. Page with `--limit` (1 to 100, default 20) and `--offset` against `pagination.total`. |
+| `oxa data-quality incident <incident_id>` | One incident with its affected data types and symbols, duration, root cause, resolution, and records affected and recovered. |
+| `oxa data-quality latency` | Current WebSocket and REST latency per venue, with the lag of order book, fills, funding, and open interest data. |
+| `oxa data-quality sla` | SLA targets against actual uptime, data completeness, and p99 API latency for one month, with incidents and downtime. `--year` and `--month` pick the month (default the current one). |
+| `oxa data-quality positions-freshness` | One row per positions venue (Hyperliquid, HIP-3, and both Lighter deployments): the latest live snapshot and its age and quality, whether it is stale, the latest hourly snapshot, and `builtThrough` and `finalizedThrough`. |
+
 ### `oxa positions ...` (account positions)
 
 Open positions, their history, and every change to them, on Hyperliquid, HIP-3, and both Lighter deployments. Hyperliquid and HIP-3 positions are keyed by wallet address (`--address 0x...`); Lighter positions are keyed by integer account index (`--account <index>`). Positions cover perpetual markets; spot and HIP-4 markets have none.
@@ -576,6 +602,14 @@ oxa outcomes get <outcome_id> [--format <format>]
 |--------|----------|-------------|
 | `outcome_id` | Yes | Numeric outcome id (e.g. `0`, `1`, `42`) |
 | `--format` | No | `json` (default) or `pretty` |
+
+### `oxa outcomes by-slug` (HIP-4 only)
+
+Get a HIP-4 outcome market by slug: the outcome's own slug (`btc-above-78213-may-03-0600`) or either side's (`btc-above-78213-yes-may-03-0600`). The response is the outcome aggregate, as with `oxa outcomes get`: it includes `aggregatedOi`, and `sideSpecs` lists each side's coin and slug. Also available as `oxa hip4 outcomes by-slug`. Quote a slug that contains spaces.
+
+```bash
+oxa outcomes by-slug <slug> [--format <format>]
+```
 
 ### `oxa orders history`
 
@@ -773,6 +807,7 @@ oxa l3 get --symbol <symbol> [options]
 | Option | Required | Description |
 |--------|----------|-------------|
 | `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
+| `--timestamp` | No | Historical snapshot time (ISO 8601 or Unix ms); latest when omitted |
 | `--depth` | No | Maximum orders per side (Lighter cap: 250) |
 | `--account` | No | Only the orders owned by this Lighter account index |
 | `--format` | No | `json` (default) or `pretty` |
@@ -788,6 +823,7 @@ Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`, `42`). H
 oxa hip4 instruments
 oxa hip4 outcomes list --settled false
 oxa hip4 outcomes get 0
+oxa hip4 outcomes by-slug btc-above-78213-may-03-0600
 
 # Questions: binary outcomes grouped under one ballot
 oxa hip4 questions list --limit 100
@@ -850,6 +886,8 @@ oxa spot candles HYPE-USDC --start 2025-03-22T10:50:22Z --end 2025-03-22T11:50:2
 
 # L4 / order lifecycle (live from 2026-05-05)
 oxa spot l4 HYPE-USDC
+oxa spot l4-diffs HYPE-USDC --start 2026-09-01T00:00:00Z --end 2026-09-01T00:05:00Z
+oxa spot l4-history HYPE-USDC --start 2026-09-01T00:00:00Z --end 2026-09-01T06:00:00Z
 oxa spot orders HYPE-USDC --start 2026-05-05T00:00:00Z --end 2026-05-05T01:00:00Z
 
 # TWAP statuses (live from 2026-05-05)
@@ -868,6 +906,8 @@ oxa spot freshness HYPE-USDC
 | `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) |
 | `oxa spot trades <symbol>` | Spot trade history (from 2025-03-22). Requires `--start`/`--end`. |
 | `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction |
+| `oxa spot l4-diffs <symbol>` | Spot L4 orderbook diffs over `--start` / `--end`, cursor paged (`--limit`, `--cursor`, `--out`) |
+| `oxa spot l4-history <symbol>` | Spot L4 orderbook checkpoints over `--start` / `--end`, cursor paged (`--limit`, `--cursor`, `--out`) |
 | `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution. Takes the time range and cursor only; Spot order history has no user, status, or order-type filters. |
 | `oxa spot twap <symbol>` | TWAP statuses for a single pair |
 | `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs |

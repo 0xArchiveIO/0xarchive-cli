@@ -31,6 +31,9 @@ import {
 } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 import { SpotCandlesClient } from '../lib/spot-candles.js';
+import { getSpotL4Resource } from '../lib/sdk.js';
+import { emitPage, toPage } from '../lib/emit.js';
+import { compact } from '../lib/positions.js';
 
 interface BaseFormatOpts {
   apiKey?: string;
@@ -393,6 +396,56 @@ export async function spotL4Get(
   } catch (error) {
     handleError(error, apiKey);
   }
+}
+
+// ── oxa spot l4-diffs / l4-history <symbol> ───────────────────────────────
+
+interface SpotL4RangeOptions extends BaseFormatOpts {
+  start: string;
+  end: string;
+  limit?: string;
+  cursor?: string;
+  out?: string;
+}
+
+async function spotL4Range(symbol: string, options: SpotL4RangeOptions, kind: 'diffs' | 'history'): Promise<void> {
+  const format = validateFormat(options.format);
+  const apiKey = resolveApiKey(options.apiKey);
+  const start = parseTimestamp(options.start, 'start');
+  const end = parseTimestamp(options.end, 'end');
+  const limit = parseLimit(options.limit);
+  if (start >= end) {
+    exitError('--start must be before --end', EXIT.VALIDATION);
+  }
+
+  const l4 = getSpotL4Resource(createClient(apiKey));
+  try {
+    const params = compact({ start, end, limit, cursor: options.cursor });
+    const result = kind === 'diffs' ? await l4.diffs(symbol, params) : await l4.history(symbol, params);
+    const page = toPage(result);
+    const records = Array.isArray(page.data) ? page.data : [];
+    const label = kind === 'diffs' ? 'L4 Diffs' : 'L4 Checkpoints';
+    emitPage(page, { format, out: options.out }, { exchange: 'spot', symbol }, () => {
+      prettyHeader(`${symbol} ${label} (spot), ${records.length} records`);
+      if (records.length === 0) {
+        prettyDim(kind === 'diffs' ? 'No L4 diffs found.' : 'No L4 checkpoints found.');
+      } else {
+        prettyDim(`${records.length} ${kind === 'diffs' ? 'diff' : 'checkpoint'} records returned`);
+        if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+      }
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function spotL4Diffs(symbol: string, options: SpotL4RangeOptions): Promise<void> {
+  return spotL4Range(symbol, options, 'diffs');
+}
+
+export async function spotL4History(symbol: string, options: SpotL4RangeOptions): Promise<void> {
+  return spotL4Range(symbol, options, 'history');
 }
 
 // ── oxa spot orders <symbol> ───────────────────────────────────────────────

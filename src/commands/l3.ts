@@ -21,6 +21,7 @@ import { writeOutputFile } from '../lib/file.js';
 
 interface L3GetOptions {
   symbol: string;
+  timestamp?: string;
   depth?: string;
   account?: string;
   apiKey?: string;
@@ -42,11 +43,13 @@ export async function l3GetCommand(options: L3GetOptions): Promise<void> {
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
   const account = parseAccount(options.account);
+  const timestamp = options.timestamp !== undefined ? parseTimestamp(options.timestamp, 'timestamp') : undefined;
 
   const client = createClient(apiKey);
 
   try {
     const sdkParams: Record<string, unknown> = {};
+    if (timestamp !== undefined) sdkParams.timestamp = timestamp;
     if (depth) sdkParams.depth = depth;
     if (account !== undefined) sdkParams.account = account;
     const data = await (client.lighter as any).l3Orderbook.get(

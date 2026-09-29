@@ -1,6 +1,7 @@
 // The @0xarchive/sdk resources added in the SDK floor release: breadth, CVD,
-// the HIP-3 oracle, HIP-4 questions, wallet classification, the symbol
-// universe, liquidation and trigger levels, and webhooks.
+// the HIP-3 oracle, HIP-4 questions and outcome slugs, wallet classification,
+// the symbol universe, liquidation and trigger levels, data quality, Spot L4
+// history, and webhooks.
 //
 // The interfaces below describe the calls the CLI makes, so the commands
 // type-check on their own and fail with a clear message on an SDK install
@@ -46,6 +47,27 @@ export interface OracleResource {
 export interface QuestionsResource {
   list(params?: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
   get(questionId: number | string): Promise<unknown>;
+}
+
+export interface OutcomesResource {
+  getBySlug(slug: string): Promise<unknown>;
+}
+
+export interface DataQualityResource {
+  status(): Promise<unknown>;
+  coverage(): Promise<unknown>;
+  exchangeCoverage(exchange: string): Promise<unknown>;
+  symbolCoverage(exchange: string, symbol: string, options?: { from?: number; to?: number }): Promise<unknown>;
+  listIncidents(params?: Record<string, unknown>): Promise<unknown>;
+  getIncident(incidentId: string): Promise<unknown>;
+  latency(): Promise<unknown>;
+  sla(params?: { year?: number; month?: number }): Promise<unknown>;
+  positionsFreshness(): Promise<unknown[]>;
+}
+
+export interface L4HistoryResource {
+  diffs(symbol: string, params: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
+  history(symbol: string, params: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
 }
 
 export interface WalletsResource {
@@ -121,8 +143,6 @@ export interface WebhookVerifier {
   WebhookSignatureError: new (...args: never[]) => Error & { reason: string };
 }
 
-type BreadthResourceClass = new (http: unknown, basePath: string) => BreadthResource;
-
 function venueClient(client: OxArchive, venue: HyperliquidVenue): unknown {
   return venue === 'hip3' ? client.hyperliquid.hip3 : client.hyperliquid;
 }
@@ -133,19 +153,9 @@ function resource<T>(owner: unknown, name: string, feature: string): T {
   return value as T;
 }
 
-/**
- * Breadth above the UTC-session VWAP. HIP-3 is `client.hyperliquid.hip3.breadth`.
- * The SDK serves Hyperliquid core breadth through the same resource class, bound
- * to the core route family, until the core client carries a `breadth` resource
- * of its own.
- */
+/** Breadth above the UTC-session VWAP: `client.hyperliquid.breadth` or `client.hyperliquid.hip3.breadth`. */
 export function getBreadthResource(client: OxArchive, venue: HyperliquidVenue): BreadthResource {
-  const own = (venueClient(client, venue) as { breadth?: BreadthResource }).breadth;
-  if (own) return own;
-  const ResourceClass = (sdk as unknown as { Hip3BreadthResource?: BreadthResourceClass }).Hip3BreadthResource;
-  const http = (client as unknown as { http?: unknown }).http;
-  if (venue !== 'hyperliquid' || !ResourceClass || !http) sdkTooOld(`${exchangeLabel(venue)} breadth`);
-  return new ResourceClass(http, '/v1/hyperliquid');
+  return resource<BreadthResource>(venueClient(client, venue), 'breadth', `${exchangeLabel(venue)} breadth`);
 }
 
 export function getCvdResource(client: OxArchive, venue: HyperliquidVenue): CvdResource {
@@ -186,6 +196,25 @@ export function getHip3OracleResource(client: OxArchive): OracleResource {
 export function getHip4QuestionsResource(client: OxArchive): QuestionsResource {
   const hip4 = (client.hyperliquid as unknown as { hip4?: unknown }).hip4;
   return resource<QuestionsResource>(hip4, 'questions', 'HIP-4 questions');
+}
+
+export function getHip4OutcomesResource(client: OxArchive): OutcomesResource {
+  const hip4 = (client.hyperliquid as unknown as { hip4?: unknown }).hip4;
+  const outcomes = resource<Partial<OutcomesResource>>(hip4, 'outcomes', 'HIP-4 outcome lookup by slug');
+  if (typeof outcomes.getBySlug !== 'function') sdkTooOld('HIP-4 outcome lookup by slug');
+  return outcomes as OutcomesResource;
+}
+
+export function getDataQualityResource(client: OxArchive, feature = 'data quality'): DataQualityResource {
+  const dataQuality = resource<Partial<DataQualityResource>>(client, 'dataQuality', feature);
+  return dataQuality as DataQualityResource;
+}
+
+export function getSpotL4Resource(client: OxArchive): L4HistoryResource {
+  const spot = (client as unknown as { spot?: unknown }).spot;
+  const l4 = resource<Partial<L4HistoryResource>>(spot, 'l4Orderbook', 'Spot L4 history');
+  if (typeof l4.diffs !== 'function' || typeof l4.history !== 'function') sdkTooOld('Spot L4 history');
+  return l4 as L4HistoryResource;
 }
 
 export function getSymbolsResource(client: OxArchive): SymbolsResource {

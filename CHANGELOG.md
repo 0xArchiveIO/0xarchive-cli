@@ -20,7 +20,10 @@
 - `oxa webhooks verify`: checks a delivery's `0xa-signature` against the raw body (`--body-file` or stdin) with the SDK verifier, accepting either of two secrets during a rotation and enforcing the 300-second replay window unless `--tolerance` or `--ignore-timestamp` says otherwise. It needs no API key and never prints the secret.
 - `oxa stream replay <channel> <symbol> --start --end [--speed] [--interval]`: WebSocket replay through the SDK client, written as NDJSON until the replay completes. Live-only channels are refused before a socket opens, with the SDK's error where the SDK refuses them.
 - `oxa stream subscribe` accepts `orderbook_full` and `hip3_orderbook_full` (the full-depth L2 book: an `l4_snapshot` with every level, then `l4_batch` level changes) and the live HIP-4 channels `hip4_trades`, `hip4_l4_diffs`, and `hip4_l4_orders`. HIP-4 coins are given as bare numerics and sent in the `#<n>` form the WebSocket API expects. `hip4_orderbook` and `hip4_open_interest`, served from stored data only, are refused before a socket opens with a pointer to `oxa stream replay`.
-- `--account <index>` on `oxa l3 get` and `oxa l3 history`: only the orders owned by one Lighter account index.
+- `--account <index>` on `oxa l3 get` and `oxa l3 history`: only the orders owned by one Lighter account index. `--timestamp` on `oxa l3 get` reads a historical snapshot.
+- `oxa data-quality ...`: `status`, `coverage` (every venue, one venue with `--exchange`, or one symbol with `--exchange` and `--symbol`, including gaps and cadence, with `--from` and `--to` bounding the gap search), `incidents` (filtered by `--status`, `--exchange`, and `--since`, offset paged), `incident <incident_id>`, `latency`, `sla` (`--year`, `--month`), and `positions-freshness`.
+- `oxa spot l4-diffs <symbol>` and `oxa spot l4-history <symbol>`: Spot L4 orderbook diffs and checkpoints over a time range, cursor paged.
+- `oxa hip4 outcomes by-slug <slug>` and `oxa outcomes by-slug <slug>`: a HIP-4 outcome market by its outcome or side slug.
 - A package-contents check (`npm run check:pack`) and a CI workflow that runs the typecheck, tests, build, and that check.
 
 ### Changed
@@ -31,7 +34,7 @@
 - `--interval 1m` works on `oxa funding history`, `oxa oi history`, `oxa prices`, `oxa liquidations volume`, and the HIP-4 open interest and price commands. The API now serves 1-minute buckets on those routes. Funding, open interest, and prices used to refuse `1m` before sending the request.
 - `oxa orders flow` and `oxa hip4 orders flow` describe `--interval` as the bucket widths the API serves: `1m`, `5m`, `15m`, `1h` (default `1h`). The help used to list `30m`, `4h`, and `1d`, which the API refuses.
 - The HIP-4 funding and liquidations refusals now list every exchange that serves those routes.
-- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, Lighter liquidations, webhooks, CVD, the HIP-3 oracle, HIP-4 questions, wallet classification, and the symbol list.
+- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, Lighter liquidations, webhooks, CVD, Hyperliquid and HIP-3 breadth, the HIP-3 oracle, HIP-4 questions, wallet classification, the symbol list, and positions freshness.
 
 ### Removed
 
