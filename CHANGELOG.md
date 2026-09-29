@@ -25,6 +25,10 @@
 
 - Documentation links point at docs.0xarchive.io.
 
+### Development
+
+- vitest 4.1 (was 2.x). Tests run on Node 20 or newer.
+
 ## 1.9.0 - 2026-09-25
 
 ### Added
