@@ -14,6 +14,7 @@ import {
   EXIT,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { spotPairsList } from './spot.js';
 
 interface InstrumentsOptions {
   exchange: string;
@@ -22,6 +23,11 @@ interface InstrumentsOptions {
 }
 
 export async function instrumentsCommand(options: InstrumentsOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    // Spot instruments are its pairs.
+    const { exchange: _exchange, ...rest } = options;
+    return spotPairsList(rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);

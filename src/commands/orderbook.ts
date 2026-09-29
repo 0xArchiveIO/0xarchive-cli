@@ -1,9 +1,11 @@
 import {
   resolveApiKey,
-  validateExchange,
+  validateVenue,
   createClient,
   getExchangeClient,
+  type Venue,
 } from '../lib/client.js';
+import type { OxArchive } from '@0xarchive/sdk';
 import {
   outputJson,
   validateFormat,
@@ -15,6 +17,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
 import { writeOutputFile } from '../lib/file.js';
 import { parsePositiveInt, parseTimestamp, parseLimit } from '../lib/time.js';
 
@@ -40,9 +43,23 @@ interface OrderbookHistoryOptions {
   format: string;
 }
 
+/** The order book resource the commands call, on every venue client. */
+interface OrderbookResource {
+  get(symbol: string, params: { depth?: number; timestamp?: number }): Promise<any>;
+  history(
+    symbol: string,
+    params: { start: number; end: number; depth?: number; limit?: number; cursor?: string },
+  ): Promise<{ data: any[]; nextCursor?: string; hasMore?: boolean }>;
+}
+
+function orderbookResource(client: OxArchive, exchange: Venue, apiKey: string): OrderbookResource {
+  if (exchange === 'spot') return client.spot.orderbook as unknown as OrderbookResource;
+  return getExchangeClient(client, exchange, apiKey).orderbook as unknown as OrderbookResource;
+}
+
 export async function orderbookGetCommand(options: OrderbookGetOptions): Promise<void> {
   const format = validateFormat(options.format);
-  const exchange = validateExchange(options.exchange);
+  const exchange = validateVenue(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
   const timestamp = parsePositiveInt(options.timestamp, 'timestamp');
@@ -50,8 +67,7 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange, apiKey);
-    const orderbook = await exchangeClient.orderbook.get(options.symbol, {
+    const orderbook = await orderbookResource(client, exchange, apiKey).get(options.symbol, {
       depth,
       timestamp,
     });
@@ -92,7 +108,7 @@ export async function orderbookGetCommand(options: OrderbookGetOptions): Promise
 
 export async function orderbookHistoryCommand(options: OrderbookHistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
-  const exchange = validateExchange(options.exchange);
+  const exchange = validateVenue(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
   const limit = parseLimit(options.limit);
@@ -106,8 +122,7 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
   const client = createClient(apiKey);
 
   try {
-    const exchangeClient = getExchangeClient(client, exchange, apiKey);
-    const result = await exchangeClient.orderbook.history(options.symbol, {
+    const result = await orderbookResource(client, exchange, apiKey).history(options.symbol, {
       start,
       end,
       depth,
@@ -115,7 +130,7 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
       cursor: options.cursor,
     });
     const snapshots = result.data;
-    const envelope = { data: snapshots, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, snapshots);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -140,9 +155,7 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
         if (snapshots.length > 20) {
           prettyDim(`... and ${snapshots.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

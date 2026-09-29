@@ -1,3 +1,4 @@
+import * as sdk from '@0xarchive/sdk';
 import { OxArchiveWs } from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { captureIo, lastError, parseCli, runCli, stdoutText } from './helpers.js';
@@ -67,17 +68,13 @@ function exitCodes(): number[] {
   return vi.mocked(process.exit).mock.calls.map(([code]) => Number(code ?? 0));
 }
 
-/** What the installed SDK says when asked to replay `channel`, or undefined. */
-function sdkRefusal(channel: string): string | undefined {
-  try {
-    (new OxArchiveWs({ apiKey: 'x' }).replay as any)(channel, 'BTC', { start: 1, end: 2 });
-  } catch (error) {
-    return (error as Error).message;
-  }
-  return undefined;
-}
+// The SDK release the CLI requires exports the channel table the replay
+// command follows. On an older install (CI before that release reaches npm)
+// the command stops with the SDK floor message instead; see the last block.
+const CHANNEL_TABLE = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, { replay: boolean; bulkReplay: boolean }> })
+  .WS_CHANNEL_CAPABILITIES;
 
-describe('oxa stream replay', () => {
+describe.runIf(CHANNEL_TABLE)('oxa stream replay', () => {
   let savedWsUrl: string | undefined;
 
   beforeEach(() => {
@@ -101,7 +98,7 @@ describe('oxa stream replay', () => {
 
   it('sends the replay through the SDK client and writes every message as NDJSON until it completes', async () => {
     const ws = await startReplay('trades', 'BTC', '--start', START, '--end', END, '--speed', '10');
-    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key');
+    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
     expect(frames(ws)).toEqual([
       { op: 'replay', channel: 'trades', symbol: 'BTC', start: START_MS, end: END_MS, speed: 10 },
     ]);
@@ -143,11 +140,11 @@ describe('oxa stream replay', () => {
   it('honors --url and OXA_WS_URL', async () => {
     process.env.OXA_WS_URL = 'wss://replay.example/ws';
     let ws = await startReplay('trades', 'BTC', '--start', START, '--end', END);
-    expect(ws.url).toBe('wss://replay.example/ws?apiKey=test-key');
+    expect(ws.url).toBe('wss://replay.example/ws?apiKey=test-key&version=2026-10-01');
 
     FakeSdkSocket.instances = [];
     ws = await startReplay('trades', 'BTC', '--start', START, '--end', END, '--url', 'wss://other.example/ws');
-    expect(ws.url).toBe('wss://other.example/ws?apiKey=test-key');
+    expect(ws.url).toBe('wss://other.example/ws?apiKey=test-key&version=2026-10-01');
   });
 
   it('prints one summary line per message in pretty format', async () => {
@@ -156,15 +153,30 @@ describe('oxa stream replay', () => {
     expect(stdoutText()).toContain(`[trades] historical_data ${START_MS} {"px":"1"}\n`);
   });
 
-  it('exits with a network error on a server error', async () => {
+  it('prints the error_code of a server error and exits by its class', async () => {
     const ws = await startReplay('trades', 'NOPE', '--start', START, '--end', END);
-    ws.message({ type: 'error', message: "The symbol 'NOPE' does not exist." });
-    expect(exitCodes()).toEqual([4]);
+    ws.message({ type: 'error', message: "The symbol 'NOPE' does not exist.", error_code: 'invalid_symbol' });
+    expect(exitCodes()).toEqual([2]);
     expect(lastError()).toEqual({
       error: "replay error: The symbol 'NOPE' does not exist.",
-      code: 4,
-      type: 'network',
+      code: 2,
+      type: 'validation',
+      error_code: 'invalid_symbol',
     });
+  });
+
+  it('exits with a network error on a server error without a code', async () => {
+    const ws = await startReplay('trades', 'BTC', '--start', START, '--end', END);
+    ws.message({ type: 'error', message: 'Replay failed.' });
+    expect(exitCodes()).toEqual([4]);
+    expect(lastError()).toEqual({ error: 'replay error: Replay failed.', code: 4, type: 'network' });
+  });
+
+  it('exits with a network error on slow_consumer', async () => {
+    const ws = await startReplay('l4_diffs', 'BTC', '--start', START, '--end', END);
+    ws.message({ type: 'error', message: 'The connection fell behind.', error_code: 'slow_consumer' });
+    expect(exitCodes()).toEqual([4]);
+    expect(lastError()).toMatchObject({ code: 4, type: 'network', error_code: 'slow_consumer' });
   });
 
   it('exits with a network error when the server closes before the replay completes', async () => {
@@ -182,30 +194,59 @@ describe('oxa stream replay', () => {
   });
 
   it.each([
-    ['spot_trades', 'spot_trades is live-only; replay is unavailable. Use `oxa spot trades <symbol> --start ... --end ...` for Spot trade history.'],
-    ['ticker', 'ticker is live-only; replay is unavailable. Use `oxa summary` or `oxa prices` for stored prices.'],
+    ['spot_trades', 'spot_trades is live only; the API does not replay it. Use `oxa trades history --exchange spot --start ... --end ...` for Spot trade history.'],
+    ['ticker', 'ticker is live only; the API does not replay it. Use `oxa summary get` or `oxa prices history` for stored prices.'],
+    ['spot_orderbook', 'spot_orderbook is live only; the API does not replay it. Use `oxa orderbook history --exchange spot` for stored Spot books.'],
   ])('refuses the live-only channel %s before opening a socket', async (channel, message) => {
     expect(await runCli('stream', 'replay', channel, 'BTC', '--start', START, '--end', END)).toBe(2);
     expect(lastError()).toEqual({ error: message, code: 2, type: 'validation' });
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 
-  it.each([
-    ['orderbook_full', 'In the CLI: `oxa l2 history` and `oxa l2 diffs`.'],
-    ['hip3_orderbook_full', 'In the CLI: `oxa l2 history --exchange hip3` and `oxa l2 diffs --exchange hip3`.'],
-    ['hip3_l4_diffs', 'In the CLI: `oxa l4 diffs --exchange hip3`.'],
-    ['hip4_l4_orders', 'In the CLI: `oxa hip4 orders history <coin>`.'],
-    ['spot_l4_diffs', 'In the CLI: `oxa spot l4 <symbol> --timestamp <ms>` for the book at a point in time.'],
-  ])('refuses %s with the SDK error before opening a socket', async (channel, hint) => {
-    const refusal = sdkRefusal(channel);
-    expect(await runCli('stream', 'replay', channel, 'BTC', '--start', START, '--end', END)).toBe(2);
-    const expected = refusal ? `${refusal} ${hint}` : `${channel} is live-only; replay is unavailable. ${hint}`;
-    expect(lastError()).toEqual({ error: expected, code: 2, type: 'validation' });
+  it('refuses exactly the channels the SDK table marks live-only', async () => {
+    const liveOnly = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.replay).map(([channel]) => channel);
+    expect(liveOnly.sort()).toEqual(['all_tickers', 'spot_orderbook', 'spot_trades', 'spot_twap', 'ticker']);
+    for (const channel of liveOnly) {
+      expect(await runCli('stream', 'replay', channel, 'BTC', '--start', START, '--end', END)).toBe(2);
+    }
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 
   it.each([
-    [['bogus', 'BTC', '--start', START, '--end', END], /^Unknown replay channel "bogus"\. Replayable channels: candles, /],
+    ['orderbook_full', 'BTC', 'BTC'],
+    ['hip3_orderbook_full', 'km:US500', 'km:US500'],
+    ['hip3_l4_diffs', 'xyz:TSLA', 'xyz:TSLA'],
+    ['hip3_l4_orders', 'xyz:TSLA', 'xyz:TSLA'],
+    ['hip4_l4_diffs', '42', '#42'],
+    ['hip4_l4_orders', '42', '#42'],
+    ['spot_l4_diffs', 'HYPE-USDC', 'HYPE-USDC'],
+    ['spot_l4_orders', 'HYPE-USDC', 'HYPE-USDC'],
+  ])('replays %s in bulk, as the capability table allows', async (channel, symbol, sent) => {
+    expect(CHANNEL_TABLE![channel]).toMatchObject({ replay: true, bulkReplay: true });
+    const ws = await startReplay(channel, symbol, '--start', START, '--end', END);
+    expect(frames(ws)[0]).toMatchObject({ op: 'replay', channel, symbol: sent, start: START_MS, end: END_MS });
+
+    const snapshot = { type: 'l4_snapshot', channel, coin: sent, last_block_number: 7, data: { bids: [[1]], asks: [] } };
+    const batch = { type: 'l4_batch', channel, coin: sent, data: [{ seq: 1 }, { seq: 2 }] };
+    const completed = { type: 'replay_completed', channel, coin: sent, snapshots_sent: 2 };
+    ws.message(snapshot);
+    ws.message(batch);
+    ws.message(completed);
+    expect(stdoutText()).toBe([snapshot, batch, completed].map((m) => JSON.stringify(m) + '\n').join(''));
+    expect(exitCodes()).toEqual([0]);
+  });
+
+  it('summarizes bulk pages in pretty format instead of printing every event', async () => {
+    const ws = await startReplay('hip3_l4_diffs', 'xyz:TSLA', '--start', START, '--end', END, '--format', 'pretty');
+    ws.message({ type: 'l4_snapshot', channel: 'hip3_l4_diffs', last_block_number: 9, timestamp: START_MS, data: { bids: [1, 2], asks: [3] } });
+    ws.message({ type: 'l4_batch', channel: 'hip3_l4_diffs', data: [{ seq: 1 }, { seq: 2 }, { seq: 3 }] });
+    expect(stdoutText()).toContain('bulk (speed ignored)');
+    expect(stdoutText()).toContain(`[hip3_l4_diffs] l4_snapshot ${START_MS} block=9 bids=2 asks=1\n`);
+    expect(stdoutText()).toContain('[hip3_l4_diffs] l4_batch 3 events\n');
+  });
+
+  it.each([
+    [['bogus', 'BTC', '--start', START, '--end', END], /^Unknown replay channel "bogus"\. Replayable channels: candles, funding, hip3_candles, /],
     [['trades', 'BTC', '--start', END, '--end', START], /^--start must be before --end$/],
     [['trades', 'BTC', '--start', START, '--end', END, '--speed', '0'], /^--speed must be a positive number/],
     [['trades', 'BTC', '--start', START, '--end', END, '--interval', '1h'], /^--interval applies to candle channels only/],
@@ -220,5 +261,26 @@ describe('oxa stream replay', () => {
     vi.stubGlobal('WebSocket', undefined);
     expect(await runCli('stream', 'replay', 'trades', 'BTC', '--start', START, '--end', END)).toBe(5);
     expect(lastError().error).toMatch(/^WebSocket replay requires Node\.js 22\+/);
+  });
+});
+
+describe.skipIf(CHANNEL_TABLE)('oxa stream replay on an SDK older than the floor', () => {
+  beforeEach(() => {
+    FakeSdkSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeSdkSocket);
+    captureIo();
+    vi.stubEnv('OXA_API_KEY', 'test-key');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('asks for the SDK release with the channel table', async () => {
+    expect(await runCli('stream', 'replay', 'trades', 'BTC', '--start', START, '--end', END)).toBe(5);
+    expect(lastError().error).toMatch(/requires @0xarchive\/sdk 1\.12\.0 or newer/);
+    expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 });

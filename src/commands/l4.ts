@@ -15,8 +15,10 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, hasMore, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, parsePositiveInt } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
+import { spotL4Diffs, spotL4Get, spotL4History } from './spot.js';
 
 // ── oxa l4 get ──────────────────────────────────────────────────────────
 
@@ -30,9 +32,13 @@ interface L4GetOptions {
 }
 
 export async function l4GetCommand(options: L4GetOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    const { exchange: _exchange, symbol, ...rest } = options;
+    return spotL4Get(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
-  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 order book');
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 order book', ['spot']);
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
 
@@ -77,9 +83,13 @@ interface L4DiffsOptions {
 }
 
 export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    const { exchange: _exchange, symbol, ...rest } = options;
+    return spotL4Diffs(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
-  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 diffs');
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 diffs', ['spot']);
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -99,7 +109,7 @@ export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
 
     const result = await (exchangeClient as any).l4Orderbook.diffs(options.symbol, sdkParams);
     const diffs = result.data;
-    const envelope = { data: diffs, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, diffs);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -108,14 +118,14 @@ export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
         records: diffs.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} L4 Diffs (${exchange})`);
         prettyField('Records', diffs.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -126,7 +136,7 @@ export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
         prettyDim('No L4 diffs found.');
       } else {
         prettyDim(`${diffs.length} diff records returned`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -154,9 +164,13 @@ interface L4HistoryOptions {
 }
 
 export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    const { exchange: _exchange, symbol, ...rest } = options;
+    return spotL4History(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
-  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 history');
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'L4 history', ['spot']);
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -176,7 +190,7 @@ export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void>
 
     const result = await (exchangeClient as any).l4Orderbook.history(options.symbol, sdkParams);
     const snapshots = result.data;
-    const envelope = { data: snapshots, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, snapshots);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -185,14 +199,14 @@ export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void>
         records: snapshots.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} L4 Orderbook History (${exchange})`);
         prettyField('Records', snapshots.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -203,7 +217,7 @@ export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void>
         prettyDim('No L4 orderbook checkpoints found.');
       } else {
         prettyDim(`${snapshots.length} checkpoint records returned`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

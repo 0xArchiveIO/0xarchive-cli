@@ -4,7 +4,7 @@
 //
 // Hyperliquid and HIP-3 are keyed by wallet address (--address 0x...); Lighter
 // by integer account index (--account <index>). Every command prints the SDK
-// page as a JSON envelope `{ data, nextCursor, meta }`; `meta` carries the
+// page as a JSON envelope `{ data, nextCursor, has_more, meta }`; `meta` carries the
 // snapshot and quality fields (as_of, snapshot_ts, source, quality, stale,
 // built_through, finalized_through, totals, notices) whenever the API sends them.
 
@@ -31,6 +31,7 @@ import {
 import { handleError } from '../lib/errors.js';
 import { parseLimit, parseTimestamp } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
+import { printNextPage } from '../lib/emit.js';
 import {
   ACCOUNT_EXCHANGES,
   POSITIONS_EXCHANGES,
@@ -281,7 +282,7 @@ function printMeta(meta: Record<string, unknown> | undefined): void {
 
 function printMore(page: PageEnvelope, shown: number, total: number): void {
   if (total > shown) prettyDim(`... and ${total - shown} more`);
-  if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+  printNextPage(page);
 }
 
 /**
@@ -300,7 +301,7 @@ function emit(
       written_to: options.out,
       records: recordCount(page.data),
       ...context,
-      has_more: page.nextCursor !== null,
+      has_more: page.has_more,
       nextCursor: page.nextCursor,
     };
     if (options.format === 'pretty') {
@@ -578,7 +579,7 @@ export async function positionsSummaryCommand(options: PositionsSummaryOptions):
         ]),
       );
       if (data.length > preview.length) prettyDim(`Showing the latest ${preview.length} of ${data.length}.`);
-      if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+      printNextPage(page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {
@@ -747,7 +748,7 @@ export async function accountsByL1Command(options: AccountsByL1Options): Promise
           text(field(a, 'firstSeen', 'first_seen')),
         ]),
       );
-      if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+      printNextPage(page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {

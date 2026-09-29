@@ -14,6 +14,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface PricesOptions {
@@ -63,7 +64,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
       interval: toSdkInterval(interval),
     });
     const prices = result.data;
-    const envelope = { data: prices, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, prices);
 
     if (format === 'pretty') {
       prettyHeader(`${options.symbol} Price History (${exchange}) — ${prices.length} records`);
@@ -83,9 +84,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
         if (prices.length > 20) {
           prettyDim(`... and ${prices.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

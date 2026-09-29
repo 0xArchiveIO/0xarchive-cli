@@ -22,7 +22,9 @@ import { parseTimestamp, parseLimit } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 import { getTriggerLevelsResource, hyperliquidVenue } from '../lib/sdk.js';
 import { levelHistoryParams, levelParams, type LevelHistoryOptions, type LevelOptions } from '../lib/levels.js';
-import { cell, emitDocument, emitPage, field, printMore, toPage } from '../lib/emit.js';
+import { cell, emitDocument, emitPage, field, hasMore, pageEnvelope, printMore, printNextPage, toPage } from '../lib/emit.js';
+import { parseBoolean } from '../lib/params.js';
+import { spotOrdersHistory } from './spot.js';
 
 // ── oxa orders history ──────────────────────────────────────────────────
 
@@ -34,6 +36,7 @@ interface OrdersHistoryOptions {
   user?: string;
   status?: string;
   orderType?: string;
+  triggered?: string;
   limit?: string;
   cursor?: string;
   out?: string;
@@ -42,9 +45,20 @@ interface OrdersHistoryOptions {
 }
 
 export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    // Spot order history takes the time range and cursor only.
+    const filter = (['user', 'status', 'orderType', 'triggered'] as const).find((key) => options[key] !== undefined);
+    if (filter) {
+      const flag = filter === 'orderType' ? 'order-type' : filter;
+      exitError(`--${flag} is not available on Spot order history, which takes the time range and cursor only.`, EXIT.VALIDATION);
+    }
+    const { exchange: _exchange, symbol, user: _u, status: _s, orderType: _o, triggered: _t, ...rest } = options;
+    return spotOrdersHistory(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
-  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'order history');
+  requireExchange(exchange, ['hyperliquid', 'hip3', 'hip4'], 'order history', ['spot']);
+  const triggered = parseBoolean(options.triggered, 'triggered');
   const apiKey = resolveApiKey(options.apiKey);
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
@@ -64,10 +78,11 @@ export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promi
     if (options.user) sdkParams.user = options.user;
     if (options.status) sdkParams.status = options.status;
     if (options.orderType) sdkParams.order_type = options.orderType;
+    if (triggered !== undefined) sdkParams.triggered = triggered;
 
     const result = await (exchangeClient as any).orders.history(options.symbol, sdkParams);
     const orders = result.data;
-    const envelope = { data: orders, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, orders);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -76,14 +91,14 @@ export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promi
         records: orders.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} Order History (${exchange})`);
         prettyField('Records', orders.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -95,16 +110,16 @@ export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promi
       } else {
         const preview = orders.slice(0, 20);
         const rows = preview.map((o: any) => [
-          o.timestamp,
+          cell(o.timestamp),
           o.side === 'B' ? 'BUY' : 'SELL',
-          o.price,
-          o.size,
-          o.status ?? '',
-          o.user ?? '',
+          cell(field(o, 'price', 'limitPrice', 'limit_price')),
+          cell(o.size),
+          cell(o.status),
+          cell(field(o, 'user', 'userAddress', 'user_address')),
         ]);
         prettyTable(['Timestamp', 'Side', 'Price', 'Size', 'Status', 'User'], rows);
         if (orders.length > 20) prettyDim(`... and ${orders.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -156,7 +171,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
 
     const result = await (exchangeClient as any).orders.flow(options.symbol, sdkParams);
     const data = result.data;
-    const envelope = { data, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, data);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -165,14 +180,14 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         records: data.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} Order Flow (${exchange})`);
         prettyField('Records', data.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -183,7 +198,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         prettyDim('No order flow data found.');
       } else {
         outputJson(envelope);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -237,7 +252,7 @@ export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<voi
 
     const result = await (exchangeClient as any).orders.tpsl(options.symbol, sdkParams);
     const orders = result.data;
-    const envelope = { data: orders, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, orders);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -246,14 +261,14 @@ export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<voi
         records: orders.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} TP/SL Orders (${exchange})`);
         prettyField('Records', orders.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -274,7 +289,7 @@ export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<voi
         ]);
         prettyTable(['Timestamp', 'Side', 'Trigger Price', 'Size', 'Triggered', 'User'], rows);
         if (orders.length > 20) prettyDim(`... and ${orders.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -376,7 +391,7 @@ export async function ordersTriggerLevelsHistoryCommand(options: TriggerLevelsHi
           ];
         }),
       );
-      printMore(shown.length, snapshots.length, page.nextCursor);
+      printMore(shown.length, snapshots.length, page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {

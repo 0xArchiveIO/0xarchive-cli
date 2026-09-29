@@ -162,7 +162,7 @@ describe('oxa positions', () => {
     await positionsGetCommand({ exchange: 'hyperliquid', address: WALLET, format: 'json' });
 
     expect(get).toHaveBeenCalledWith(WALLET, {});
-    expect(stdoutJson()).toEqual({ data: WALLET_PAGE.data, nextCursor: null, meta: WALLET_PAGE.meta });
+    expect(stdoutJson()).toEqual({ data: WALLET_PAGE.data, nextCursor: null, has_more: false, meta: WALLET_PAGE.meta });
     expect(sdk.state.apiKeys).toEqual(['test-key']);
   });
 
@@ -210,6 +210,7 @@ describe('oxa positions', () => {
     expect(stdoutJson()).toEqual({
       data: { positions: [], account: null },
       nextCursor: null,
+      has_more: false,
       meta: { source: 'snapshot' },
     });
   });
@@ -251,6 +252,7 @@ describe('oxa positions', () => {
     expect(stdoutJson()).toEqual({
       data: [{ symbol: 'AAPL-USDG' }],
       nextCursor: 'c2',
+      has_more: true,
       meta: { finalizedThrough: 'x' },
     });
   });
@@ -262,7 +264,7 @@ describe('oxa positions', () => {
     await positionsChangesCommand({ exchange: 'hip3', address: WALLET, start: START, end: END, format: 'json' });
 
     expect(changes).toHaveBeenCalledWith(WALLET, { start: Date.parse(START), end: Date.parse(END) });
-    expect(stdoutJson()).toEqual({ data: [], nextCursor: null });
+    expect(stdoutJson()).toEqual({ data: [], nextCursor: null, has_more: false });
   });
 
   it('lists one market with every filter on Lighter', async () => {
@@ -327,7 +329,7 @@ describe('oxa positions', () => {
       cursor: 'p1',
       limit: 48,
     });
-    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'p2' });
+    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'p2', has_more: true });
   });
 
   it('pages every open position at one hour', async () => {
@@ -343,7 +345,7 @@ describe('oxa positions', () => {
     });
 
     expect(all).toHaveBeenCalledWith({ hour: HOUR, includeSystem: true, limit: 2000 });
-    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'more' });
+    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'more', has_more: true });
   });
 
   it('gets account summaries and account history on HIP-3', async () => {
@@ -379,7 +381,7 @@ describe('oxa positions', () => {
     await accountsByL1Command({ exchange: 'lighter', l1Address: WALLET, limit: '10', format: 'json' });
 
     expect(byL1).toHaveBeenCalledWith(WALLET, { limit: 10 });
-    expect(stdoutJson()).toEqual({ data, nextCursor: null });
+    expect(stdoutJson()).toEqual({ data, nextCursor: null, has_more: false });
   });
 
   it('writes the page to --out and prints a summary', async () => {
@@ -393,6 +395,7 @@ describe('oxa positions', () => {
       expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({
         data: WALLET_PAGE.data,
         nextCursor: null,
+        has_more: false,
         meta: WALLET_PAGE.meta,
       });
       expect(stdoutJson()).toEqual({
@@ -554,6 +557,7 @@ describe('toEnvelope', () => {
     expect(toEnvelope({ data: [1], nextCursor: 'c', meta: { quality: 'complete' } })).toEqual({
       data: [1],
       nextCursor: 'c',
+      has_more: true,
       meta: { quality: 'complete' },
     });
   });
@@ -562,15 +566,17 @@ describe('toEnvelope', () => {
     expect(toEnvelope({ data: [], meta: { nextCursor: 'm' } })).toEqual({
       data: [],
       nextCursor: 'm',
+      has_more: true,
       meta: { nextCursor: 'm' },
     });
   });
 
   it('wraps a bare result', () => {
-    expect(toEnvelope([1, 2])).toEqual({ data: [1, 2], nextCursor: null });
+    expect(toEnvelope([1, 2])).toEqual({ data: [1, 2], nextCursor: null, has_more: false });
     expect(toEnvelope({ positions: [], account: null, meta: { stale: true } })).toEqual({
       data: { positions: [], account: null },
       nextCursor: null,
+      has_more: false,
       meta: { stale: true },
     });
   });
@@ -612,7 +618,7 @@ describe('Lighter deployments on the shared verbs', () => {
       limit: 5,
       cursor: undefined,
     });
-    expect(stdoutJson()).toEqual({ data: rows, nextCursor: 'n1' });
+    expect(stdoutJson()).toEqual({ data: rows, nextCursor: 'n1', has_more: true });
 
     await liquidationsVolumeCommand({ exchange, symbol: 'BTC', start: START, end: END, interval: '1h', format: 'pretty' });
     expect(resource().volume).toHaveBeenCalledWith('BTC', {
@@ -662,6 +668,7 @@ describe('Lighter deployments on the shared verbs', () => {
     expect(stdoutJson()).toEqual({
       data: [],
       nextCursor: null,
+      has_more: false,
       meta: { finalizedThrough: '2026-09-25T00:00:00Z', clampedTo: '2026-09-25T00:00:00Z' },
     });
   });
@@ -681,14 +688,14 @@ describe('Lighter deployments on the shared verbs', () => {
       limit: undefined,
       cursor: undefined,
     });
-    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'c1' });
+    expect(stdoutJson()).toEqual({ data: [], nextCursor: 'c1', has_more: true });
   });
 
   it.each([
     [() => ordersHistoryCommand({ exchange: 'rh-lighter', symbol: 'BTC', start: START, end: END, format: 'json' }),
-      'Lighter on Robinhood Chain has no order history endpoint. Use --exchange hyperliquid, hip3, or hip4.'],
+      'Lighter on Robinhood Chain has no order history endpoint. Use --exchange hyperliquid, hip3, hip4, or spot.'],
     [() => l4GetCommand({ exchange: 'lighter', symbol: 'BTC', format: 'json' }),
-      'Lighter has no L4 order book endpoint. Use --exchange hyperliquid, hip3, or hip4.'],
+      'Lighter has no L4 order book endpoint. Use --exchange hyperliquid, hip3, hip4, or spot.'],
     [() => l2GetCommand({ exchange: 'rh-lighter', symbol: 'BTC', format: 'json' }),
       'Lighter on Robinhood Chain has no derived L2 order book endpoint. Use --exchange hyperliquid or hip3.'],
   ])('rejects order-level routes on Lighter deployments (%#)', (run, message) => expectExit(run, 2, message));

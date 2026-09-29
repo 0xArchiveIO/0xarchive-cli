@@ -16,6 +16,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface FundingCurrentOptions {
@@ -100,7 +101,7 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
       interval: toSdkInterval(interval),
     });
     const rates = result.data;
-    const envelope = { data: rates, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, rates);
 
     if (format === 'pretty') {
       prettyHeader(`${options.symbol} Funding History (${exchange}) — ${rates.length} records`);
@@ -119,9 +120,7 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
         if (rates.length > 20) {
           prettyDim(`... and ${rates.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

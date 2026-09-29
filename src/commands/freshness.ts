@@ -13,6 +13,7 @@ import {
   EXIT,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { spotFreshness } from './spot.js';
 
 interface FreshnessOptions {
   exchange: string;
@@ -30,6 +31,10 @@ function formatLag(lagMs: number | undefined | null): string {
 }
 
 export async function freshnessCommand(options: FreshnessOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    const { exchange: _exchange, symbol, ...rest } = options;
+    return spotFreshness(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);

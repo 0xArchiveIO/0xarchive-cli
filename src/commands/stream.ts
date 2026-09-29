@@ -14,6 +14,9 @@ import {
   exitError,
   prettyDim,
 } from '../lib/output.js';
+import { exitWsError } from '../lib/errors.js';
+import { API_VERSION } from '../lib/http.js';
+import { wsChannelCapabilities } from '../lib/sdk.js';
 
 const DEFAULT_WS_URL = 'wss://api.0xarchive.io/ws';
 
@@ -32,76 +35,44 @@ type Channel =
   | 'hip3_liquidations'
   | 'trades'
   | 'hip3_trades'
+  | 'hip4_trades'
   | 'lighter_trades'
   | 'rh_lighter_trades'
   | 'spot_trades'
   | 'orderbook'
   | 'hip3_orderbook'
+  | 'hip4_orderbook'
   | 'lighter_orderbook'
   | 'rh_lighter_orderbook'
   | 'spot_orderbook';
 
-// Allow-listed channels for `oxa stream subscribe <channel> <symbol>`.
-const VALID_GENERIC_CHANNELS: ReadonlySet<string> = new Set([
-  'liquidations',
-  'hip3_liquidations',
-  'trades',
-  'orderbook',
-  'candles',
-  'open_interest',
-  'funding',
-  'ticker',
-  'all_tickers',
-  'l4_diffs',
-  'l4_orders',
-  'hip3_l4_diffs',
-  'hip3_l4_orders',
-  'lighter_orderbook',
-  'lighter_trades',
-  'lighter_open_interest',
-  'lighter_funding',
-  'rh_lighter_orderbook',
-  'rh_lighter_trades',
-  'rh_lighter_open_interest',
-  'rh_lighter_funding',
-  'hip3_orderbook',
-  'hip3_trades',
-  'hip3_candles',
-  'hip3_open_interest',
-  'hip3_funding',
-  'spot_orderbook',
-  'spot_trades',
-  'spot_l4_diffs',
-  'spot_l4_orders',
-  'spot_twap',
-  // Full-depth L2 book: an l4_snapshot with every price level, then l4_batch
-  // messages of level changes. Live only.
-  'orderbook_full',
-  'hip3_orderbook_full',
-  // HIP-4 live channels. hip4_orderbook and hip4_open_interest are replay-only.
-  'hip4_trades',
-  'hip4_l4_diffs',
-  'hip4_l4_orders',
-]);
-
-// Lighter channels (mainnet and Robinhood Chain) that support historical
-// replay but not live subscriptions. They are rejected before a socket is
-// opened, with a pointer to the REST command that serves the same data.
-export const LIGHTER_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
-  lighter_candles: 'Use `oxa candles --exchange lighter` for candle history.',
+/**
+ * Where the history of a replay-only channel is served. Hints only: which
+ * channels stream live is the SDK's channel table (WS_CHANNEL_CAPABILITIES),
+ * which mirrors `/v1/capabilities`.
+ */
+export const REPLAY_ONLY_HINTS: Readonly<Record<string, string>> = {
+  candles: 'Use `oxa candles history --exchange hyperliquid` or `oxa stream replay candles <symbol>`.',
+  hip3_candles: 'Use `oxa candles history --exchange hip3` or `oxa stream replay hip3_candles <symbol>`.',
+  lighter_candles: 'Use `oxa candles history --exchange lighter` for candle history.',
   lighter_l3_orderbook:
-    'Use `oxa l3 get` for the current L3 book or `oxa l3 history` for stored snapshots.',
-  rh_lighter_candles: 'Use `oxa candles --exchange rh-lighter` for candle history.',
+    'Use `oxa lighter l3 get` for the current L3 book or `oxa lighter l3 history` for stored snapshots.',
+  rh_lighter_candles: 'Use `oxa candles history --exchange rh-lighter` for candle history.',
 };
 
-// HIP-4 channels served from stored data only; their live bridges are paused.
-// Rejected before a socket is opened, with a pointer to replay and REST.
-export const HIP4_REPLAY_ONLY_CHANNELS: Readonly<Record<string, string>> = {
-  hip4_orderbook:
-    'Use `oxa stream replay hip4_orderbook <coin> --start ... --end ...` for stored books, or `oxa hip4 orderbook get <coin>` for the current book.',
-  hip4_open_interest:
-    'Use `oxa stream replay hip4_open_interest <coin> --start ... --end ...` for stored snapshots, or `oxa hip4 oi current <coin>` for the current value.',
-};
+/** The channels the SDK's table marks as live, sorted. */
+export function liveChannels(): string[] {
+  const table = wsChannelCapabilities();
+  return Object.keys(table)
+    .filter((channel) => table[channel].live)
+    .sort();
+}
+
+/** Add the API version the CLI is written against to a WebSocket URL. */
+export function wsUrlWithVersion(baseUrl: string): string {
+  if (/[?&]version=/.test(baseUrl)) return baseUrl;
+  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}version=${API_VERSION}`;
+}
 
 // A connection that falls behind a Lighter live channel (either deployment)
 // gets a "Dropped ~N live <channel> messages ..." error notice while the
@@ -132,6 +103,7 @@ const VERB_CHANNELS: Readonly<Record<string, Readonly<Record<string, Channel>>>>
   trades: {
     hyperliquid: 'trades',
     hip3: 'hip3_trades',
+    hip4: 'hip4_trades',
     lighter: 'lighter_trades',
     'rh-lighter': 'rh_lighter_trades',
     spot: 'spot_trades',
@@ -139,6 +111,7 @@ const VERB_CHANNELS: Readonly<Record<string, Readonly<Record<string, Channel>>>>
   orderbook: {
     hyperliquid: 'orderbook',
     hip3: 'hip3_orderbook',
+    hip4: 'hip4_orderbook',
     lighter: 'lighter_orderbook',
     'rh-lighter': 'rh_lighter_orderbook',
     spot: 'spot_orderbook',
@@ -250,7 +223,8 @@ async function streamChannel(
   }
 
   const baseUrl = options.url ?? process.env.OXA_WS_URL ?? DEFAULT_WS_URL;
-  const url = `${baseUrl}?apiKey=${encodeURIComponent(apiKey)}`;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  const url = wsUrlWithVersion(`${baseUrl}${separator}apiKey=${encodeURIComponent(apiKey)}`);
 
   const WS = (globalThis as any).WebSocket as {
     new (url: string): WebSocket;
@@ -303,10 +277,12 @@ async function streamChannel(
     if (payload?.type === 'error') {
       const message = String(payload.message ?? 'unknown error');
       if (isLighterDropNotice(channel, message)) {
-        process.stderr.write(JSON.stringify({ warning: `stream warning: ${message}`, type: 'lag' }) + '\n');
+        const warning: Record<string, unknown> = { warning: `stream warning: ${message}`, type: 'lag' };
+        if (typeof payload.error_code === 'string') warning.error_code = payload.error_code;
+        process.stderr.write(JSON.stringify(warning) + '\n');
         return;
       }
-      exitError(`stream error: ${message}`, EXIT.NETWORK);
+      exitWsError('stream error', payload);
     }
 
     // Pass through data and historical_data envelopes, one JSON record per line.
@@ -357,21 +333,17 @@ export async function streamGenericCommand(
   options: StreamOptions,
 ): Promise<void> {
   const ch = String(channel).toLowerCase();
-  if (Object.hasOwn(LIGHTER_REPLAY_ONLY_CHANNELS, ch)) {
-    exitError(
-      `${ch} supports historical replay only; live subscriptions are not available on this channel. ${LIGHTER_REPLAY_ONLY_CHANNELS[ch]}`,
-      EXIT.VALIDATION,
-    );
+  const table = wsChannelCapabilities();
+  const capability = Object.hasOwn(table, ch) ? table[ch] : undefined;
+  if (!capability) {
+    exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
   }
-  if (Object.hasOwn(HIP4_REPLAY_ONLY_CHANNELS, ch)) {
+  if (!capability.live) {
+    const hint = Object.hasOwn(REPLAY_ONLY_HINTS, ch)
+      ? ` ${REPLAY_ONLY_HINTS[ch]}`
+      : ` Use \`oxa stream replay ${ch} <symbol> --start ... --end ...\` for stored data.`;
     exitError(
-      `${ch} is served from stored data only; live subscriptions are not available on this channel. ${HIP4_REPLAY_ONLY_CHANNELS[ch]}`,
-      EXIT.VALIDATION,
-    );
-  }
-  if (!VALID_GENERIC_CHANNELS.has(ch)) {
-    exitError(
-      `Unknown stream channel "${channel}". Valid channels: ${Array.from(VALID_GENERIC_CHANNELS).sort().join(', ')}.`,
+      `${ch} supports historical replay only; live subscriptions are not available on this channel.${hint}`,
       EXIT.VALIDATION,
     );
   }

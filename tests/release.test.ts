@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import type { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
+import { program } from '../src/cli.js';
 import { SDK_FLOOR, VALID_EXCHANGES } from '../src/lib/client.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -37,5 +39,31 @@ describe('release metadata', () => {
       expect(doc).not.toMatch(/liquidations,? (order book|and order book)[^.]*2026-08-22/);
       expect(doc).not.toContain('Robinhood Chain liquidations from 2026-08-22');
     }
+  });
+
+  it('names the venue Lighter, not Lighter.xyz, in the help, README, changelog, and source', () => {
+    const help: string[] = [];
+    const walk = (command: Command) => {
+      help.push(command.helpInformation());
+      for (const sub of command.commands) walk(sub);
+    };
+    walk(program);
+    const sources = readdirSync(new URL('../src/', import.meta.url), { recursive: true })
+      .filter((file) => String(file).endsWith('.ts'))
+      .map((file) => readFileSync(new URL(`../src/${String(file)}`, import.meta.url), 'utf8'));
+    for (const text of [...help, readme, changelog, ...sources]) {
+      expect(text).not.toMatch(/Lighter\.xyz/i);
+    }
+    expect(help.join('\n')).toContain('Lighter');
+  });
+
+  it('keeps em dashes out of the help text', () => {
+    const help: string[] = [];
+    const walk = (command: Command) => {
+      help.push(command.helpInformation());
+      for (const sub of command.commands) walk(sub);
+    };
+    walk(program);
+    expect(help.join('\n')).not.toContain('\u2014');
   });
 });

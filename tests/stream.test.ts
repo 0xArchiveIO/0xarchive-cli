@@ -1,7 +1,7 @@
+import * as sdk from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  HIP4_REPLAY_ONLY_CHANNELS,
-  LIGHTER_REPLAY_ONLY_CHANNELS,
+  REPLAY_ONLY_HINTS,
   buildSubscribeMessage,
   isLighterDropNotice,
   parseIntervalMs,
@@ -11,7 +11,14 @@ import {
   streamOrderbookCommand,
   streamTradesCommand,
   wsSymbol,
+  wsUrlWithVersion,
 } from '../src/commands/stream.js';
+
+// `oxa stream subscribe` allows the channels the SDK's channel table marks
+// live. The SDK release the CLI requires exports that table; on an older
+// install (CI before that release reaches npm) those tests are skipped.
+const CHANNEL_TABLE = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, { live: boolean; replay: boolean }> })
+  .WS_CHANNEL_CAPABILITIES;
 
 class ProcessExit extends Error {
   constructor(readonly code: number) {
@@ -102,6 +109,7 @@ describe('oxa stream channel resolution', () => {
     ['trades', undefined, 'trades'],
     ['trades', 'hyperliquid', 'trades'],
     ['trades', 'hip3', 'hip3_trades'],
+    ['trades', 'hip4', 'hip4_trades'],
     ['trades', 'lighter', 'lighter_trades'],
     ['trades', 'Lighter', 'lighter_trades'],
     ['trades', 'spot', 'spot_trades'],
@@ -109,6 +117,7 @@ describe('oxa stream channel resolution', () => {
     ['trades', 'RH-Lighter', 'rh_lighter_trades'],
     ['orderbook', undefined, 'orderbook'],
     ['orderbook', 'hip3', 'hip3_orderbook'],
+    ['orderbook', 'hip4', 'hip4_orderbook'],
     ['orderbook', 'lighter', 'lighter_orderbook'],
     ['orderbook', 'rh-lighter', 'rh_lighter_orderbook'],
     ['orderbook', 'spot', 'spot_orderbook'],
@@ -119,9 +128,9 @@ describe('oxa stream channel resolution', () => {
   });
 
   it.each([
-    ['trades', 'hip4', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
-    ['orderbook', 'rh_lighter', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
-    ['orderbook', 'constructor', 'hyperliquid, hip3, lighter, rh-lighter, spot'],
+    ['trades', 'hip5', 'hyperliquid, hip3, hip4, lighter, rh-lighter, spot'],
+    ['orderbook', 'rh_lighter', 'hyperliquid, hip3, hip4, lighter, rh-lighter, spot'],
+    ['orderbook', 'constructor', 'hyperliquid, hip3, hip4, lighter, rh-lighter, spot'],
     ['liquidations', 'lighter', 'hyperliquid, hip3'],
     ['liquidations', 'rh-lighter', 'hyperliquid, hip3'],
     ['liquidations', 'toString', 'hyperliquid, hip3'],
@@ -271,7 +280,7 @@ describe('oxa stream over a WebSocket', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1);
     const ws = FakeWebSocket.instances[0];
-    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key');
+    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
 
     ws.fire('open');
     expect(ws.sent.map((frame) => JSON.parse(frame))).toEqual([
@@ -293,33 +302,6 @@ describe('oxa stream over a WebSocket', () => {
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'lighter_trades', symbol: 'ETH' });
-  });
-
-  it.each([
-    'lighter_orderbook',
-    'lighter_trades',
-    'lighter_open_interest',
-    'lighter_funding',
-    'rh_lighter_orderbook',
-    'rh_lighter_trades',
-    'rh_lighter_open_interest',
-    'rh_lighter_funding',
-  ])(
-    'forwards the live Lighter channel %s through `oxa stream subscribe`',
-    async (channel) => {
-      await streamGenericCommand(channel.toUpperCase(), 'BTC', { format: 'json' });
-      const ws = FakeWebSocket.instances[0];
-      ws.fire('open');
-      expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel, symbol: 'BTC' });
-    },
-  );
-
-  it('uses the event time in the pretty summary line', async () => {
-    await streamGenericCommand('lighter_orderbook', 'BTC', { format: 'pretty' });
-    const ws = FakeWebSocket.instances[0];
-    ws.fire('open');
-    ws.message({ type: 'data', channel: 'lighter_orderbook', coin: 'BTC', symbol: 'BTC', data: LIGHTER_BOOK });
-    expect(stdoutLines().at(-1)).toBe(`[lighter_orderbook] 1790294171459 ${JSON.stringify(LIGHTER_BOOK)}\n`);
   });
 
   it('keeps streaming after a Lighter drop notice and reports it on stderr as a warning', async () => {
@@ -349,16 +331,6 @@ describe('oxa stream over a WebSocket', () => {
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
   });
 
-  it('still exits on a drop notice for a non-Lighter channel', async () => {
-    await streamGenericCommand('l4_diffs', 'BTC', { format: 'json' });
-    const ws = FakeWebSocket.instances[0];
-    ws.fire('open');
-    const message = 'Dropped ~5 live messages: your connection fell behind the Hyperliquid stream.';
-    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
-    expect(process.exit).toHaveBeenCalledWith(4);
-    expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
-  });
-
   it('exits with a network error on any other server error', async () => {
     await streamOrderbookCommand('NOPE', { exchange: 'lighter', format: 'json' });
     const ws = FakeWebSocket.instances[0];
@@ -366,6 +338,69 @@ describe('oxa stream over a WebSocket', () => {
     const message = 'Unknown Lighter symbol NOPE.';
     expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
+  });
+
+  it('prints the error_code of a server error and exits by its class', async () => {
+    await streamTradesCommand('NOPE', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message = "The symbol 'NOPE' does not exist.";
+    expect(() => ws.message({ type: 'error', message, error_code: 'invalid_symbol' })).toThrow(ProcessExit);
+    expect(process.exit).toHaveBeenCalledWith(2);
+    expect(stderrPayloads().at(-1)).toEqual({
+      error: `stream error: ${message}`,
+      code: 2,
+      type: 'validation',
+      error_code: 'invalid_symbol',
+    });
+  });
+
+  it('exits with a network error and the code on slow_consumer', async () => {
+    await streamOrderbookCommand('BTC', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(() =>
+      ws.message({ type: 'error', message: 'The connection fell behind.', error_code: 'slow_consumer' }),
+    ).toThrow(ProcessExit);
+    expect(stderrPayloads().at(-1)).toMatchObject({ code: 4, type: 'network', error_code: 'slow_consumer' });
+  });
+
+  it('keeps the error_code on a Lighter drop notice warning', async () => {
+    await streamTradesCommand('BTC', { exchange: 'lighter', format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message = 'Dropped ~2 live lighter_trades messages for BTC: your connection fell behind.';
+    expect(() => ws.message({ type: 'error', message, error_code: 'slow_consumer' })).not.toThrow();
+    expect(stderrPayloads().at(-1)).toEqual({
+      warning: `stream warning: ${message}`,
+      type: 'lag',
+      error_code: 'slow_consumer',
+    });
+  });
+
+  it('subscribes to the live HIP-4 book and trades from the dedicated verbs', async () => {
+    await streamOrderbookCommand('42', { exchange: 'hip4', format: 'json' });
+    let ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_orderbook', symbol: '#42' });
+
+    FakeWebSocket.instances = [];
+    await streamTradesCommand('42', { exchange: 'hip4', format: 'json' });
+    ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_trades', symbol: '#42' });
+  });
+
+  it('adds the API version to --url and OXA_WS_URL', async () => {
+    process.env.OXA_WS_URL = 'wss://stream.example/ws';
+    await streamTradesCommand('BTC', { format: 'json' });
+    expect(FakeWebSocket.instances[0].url).toBe('wss://stream.example/ws?apiKey=test-key&version=2026-10-01');
+
+    FakeWebSocket.instances = [];
+    await streamTradesCommand('BTC', { format: 'json', url: 'wss://other.example/ws?region=ap' });
+    expect(FakeWebSocket.instances[0].url).toBe(
+      'wss://other.example/ws?region=ap&apiKey=test-key&version=2026-10-01',
+    );
   });
 
   it('treats its own --duration-ms close as a clean stop even when the server drops the session', async () => {
@@ -412,17 +447,6 @@ describe('oxa stream over a WebSocket', () => {
     expect(stderrPayloads().at(-1)).toEqual({ error: 'websocket error: socket hang up', code: 4, type: 'network' });
   });
 
-  it.each(Object.keys(LIGHTER_REPLAY_ONLY_CHANNELS))(
-    'rejects the replay-only channel %s before opening a socket',
-    async (channel) => {
-      await expectValidationExit(
-        () => streamGenericCommand(channel, 'BTC', { format: 'json' }),
-        `${channel} supports historical replay only; live subscriptions are not available on this channel. ` +
-          LIGHTER_REPLAY_ONLY_CHANNELS[channel],
-      );
-    },
-  );
-
   it('rejects --interval-ms on a non-Lighter orderbook before opening a socket', async () => {
     await expectValidationExit(
       () => streamOrderbookCommand('BTC', { intervalMs: '250', format: 'json' }),
@@ -432,31 +456,12 @@ describe('oxa stream over a WebSocket', () => {
     );
   });
 
-  it('rejects an out-of-range --interval-ms before opening a socket', async () => {
-    await expectValidationExit(
-      () => streamGenericCommand('lighter_orderbook', 'BTC', { intervalMs: '50', format: 'json' }),
-      '--interval-ms must be a whole number between 100 and 5000 for lighter_orderbook (got 50). ' +
-        'Leave it out for one book a second.',
-    );
-  });
-
   it('rejects live liquidations for Lighter before opening a socket', async () => {
     await expectValidationExit(
       () => streamLiquidationsCommand('BTC', { exchange: 'lighter', format: 'json' }),
       'Invalid exchange "lighter" for `oxa stream liquidations`. Must be one of: hyperliquid, hip3.',
     );
   });
-
-  it.each(['constructor', '__proto__', 'hasOwnProperty'])(
-    'treats the object-builtin name %s as an unknown channel',
-    async (channel) => {
-      await expect(
-        Promise.resolve().then(() => streamGenericCommand(channel, 'BTC', { format: 'json' })),
-      ).rejects.toMatchObject({ code: 2 });
-      expect(stderrPayloads().at(-1)?.error).toMatch(new RegExp(`^Unknown stream channel "${channel}"`));
-      expect(FakeWebSocket.instances).toHaveLength(0);
-    },
-  );
 
   it('treats a Ctrl-C before the socket opens as a clean stop', async () => {
     await streamTradesCommand('BTC', { exchange: 'lighter', format: 'json' });
@@ -480,7 +485,7 @@ describe('oxa stream over a WebSocket', () => {
   it('subscribes to rh_lighter_orderbook with interval_ms on the default endpoint', async () => {
     await streamOrderbookCommand('AAPL-USDG', { exchange: 'rh-lighter', intervalMs: '500', format: 'json' });
     const ws = FakeWebSocket.instances[0];
-    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key');
+    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
     ws.fire('open');
     expect(ws.sent.map((frame) => JSON.parse(frame))).toEqual([
       { op: 'subscribe', channel: 'rh_lighter_orderbook', symbol: 'AAPL-USDG', interval_ms: 500 },
@@ -515,6 +520,127 @@ describe('oxa stream over a WebSocket', () => {
       'Invalid exchange "rh-lighter" for `oxa stream liquidations`. Must be one of: hyperliquid, hip3.',
     );
   });
+});
+
+describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table', () => {
+  let savedWsUrl: string | undefined;
+
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubEnv('OXA_API_KEY', 'test-key');
+    savedWsUrl = process.env.OXA_WS_URL;
+    delete process.env.OXA_WS_URL;
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'on').mockImplementation(() => process);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new ProcessExit(code ?? 0);
+    }) as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    if (savedWsUrl !== undefined) process.env.OXA_WS_URL = savedWsUrl;
+  });
+
+  it.each([
+    'lighter_orderbook',
+    'lighter_trades',
+    'lighter_open_interest',
+    'lighter_funding',
+    'rh_lighter_orderbook',
+    'rh_lighter_trades',
+    'rh_lighter_open_interest',
+    'rh_lighter_funding',
+  ])(
+    'forwards the live Lighter channel %s through `oxa stream subscribe`',
+    async (channel) => {
+      await streamGenericCommand(channel.toUpperCase(), 'BTC', { format: 'json' });
+      const ws = FakeWebSocket.instances[0];
+      ws.fire('open');
+      expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel, symbol: 'BTC' });
+    },
+  );
+
+  it('uses the event time in the pretty summary line', async () => {
+    await streamGenericCommand('lighter_orderbook', 'BTC', { format: 'pretty' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    ws.message({ type: 'data', channel: 'lighter_orderbook', coin: 'BTC', symbol: 'BTC', data: LIGHTER_BOOK });
+    expect(stdoutLines().at(-1)).toBe(`[lighter_orderbook] 1790294171459 ${JSON.stringify(LIGHTER_BOOK)}\n`);
+  });
+
+  it('still exits on a drop notice for a non-Lighter channel', async () => {
+    await streamGenericCommand('l4_diffs', 'BTC', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const message = 'Dropped ~5 live messages: your connection fell behind the Hyperliquid stream.';
+    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
+    expect(process.exit).toHaveBeenCalledWith(4);
+    expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
+  });
+
+  it.each(Object.keys(REPLAY_ONLY_HINTS))(
+    'rejects the replay-only channel %s before opening a socket',
+    async (channel) => {
+      await expectValidationExit(
+        () => streamGenericCommand(channel, 'BTC', { format: 'json' }),
+        `${channel} supports historical replay only; live subscriptions are not available on this channel. ` +
+          REPLAY_ONLY_HINTS[channel],
+      );
+    },
+  );
+
+  it('refuses exactly the channels the SDK table marks replay-only', () => {
+    const replayOnly = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.live).map(([channel]) => channel);
+    expect(replayOnly.sort()).toEqual(Object.keys(REPLAY_ONLY_HINTS).sort());
+  });
+
+  it.each([
+    ['hip4_orderbook', '0', '#0'],
+    ['hip4_open_interest', '42', '#42'],
+    ['spot_l4_orders', 'HYPE-USDC', 'HYPE-USDC'],
+    ['spot_twap', 'HYPE-USDC', 'HYPE-USDC'],
+    ['hip3_l4_orders', 'xyz:TSLA', 'xyz:TSLA'],
+    ['all_tickers', 'BTC', 'BTC'],
+  ])('subscribes to the live channel %s the table allows', async (channel, symbol, sent) => {
+    expect(CHANNEL_TABLE![channel].live).toBe(true);
+    await streamGenericCommand(channel, symbol, { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel, symbol: sent });
+  });
+
+  it('lists the live channels when the channel is unknown', async () => {
+    await expect(
+      Promise.resolve().then(() => streamGenericCommand('bogus', 'BTC', { format: 'json' })),
+    ).rejects.toMatchObject({ code: 2 });
+    const error = stderrPayloads().at(-1)?.error as string;
+    expect(error).toMatch(/^Unknown stream channel "bogus"\. Live channels: all_tickers, funding, /);
+    expect(error).not.toContain('lighter_candles');
+  });
+
+  it('rejects an out-of-range --interval-ms before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamGenericCommand('lighter_orderbook', 'BTC', { intervalMs: '50', format: 'json' }),
+      '--interval-ms must be a whole number between 100 and 5000 for lighter_orderbook (got 50). ' +
+        'Leave it out for one book a second.',
+    );
+  });
+
+  it.each(['constructor', '__proto__', 'hasOwnProperty'])(
+    'treats the object-builtin name %s as an unknown channel',
+    async (channel) => {
+      await expect(
+        Promise.resolve().then(() => streamGenericCommand(channel, 'BTC', { format: 'json' })),
+      ).rejects.toMatchObject({ code: 2 });
+      expect(stderrPayloads().at(-1)?.error).toMatch(new RegExp(`^Unknown stream channel "${channel}"`));
+      expect(FakeWebSocket.instances).toHaveLength(0);
+    },
+  );
 
   it.each([
     ['orderbook_full', 'BTC'],
@@ -552,17 +678,18 @@ describe('oxa stream over a WebSocket', () => {
     ws.fire('open');
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_trades', symbol: '#0' });
   });
+});
 
-  it.each(Object.keys(HIP4_REPLAY_ONLY_CHANNELS))(
-    'rejects the stored-only channel %s before opening a socket',
-    async (channel) => {
-      await expectValidationExit(
-        () => streamGenericCommand(channel, '0', { format: 'json' }),
-        `${channel} is served from stored data only; live subscriptions are not available on this channel. ` +
-          HIP4_REPLAY_ONLY_CHANNELS[channel],
-      );
-    },
-  );
+describe('WebSocket API version', () => {
+  it('adds version=2026-10-01 once, with the right separator', () => {
+    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws')).toBe('wss://api.0xarchive.io/ws?version=2026-10-01');
+    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws?apiKey=k')).toBe(
+      'wss://api.0xarchive.io/ws?apiKey=k&version=2026-10-01',
+    );
+    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws?version=2026-10-01')).toBe(
+      'wss://api.0xarchive.io/ws?version=2026-10-01',
+    );
+  });
 });
 
 describe('WebSocket symbols', () => {
