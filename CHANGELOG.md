@@ -25,6 +25,10 @@
 
 - Documentation links point at docs.0xarchive.io.
 
+### Development
+
+- vitest 3.2 (was 2.x), the patched line that installs cleanly on the npm bundled with Node 20 and 22.
+
 ## 1.9.0 - 2026-09-25
 
 ### Added
