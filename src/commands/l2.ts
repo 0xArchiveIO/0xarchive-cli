@@ -79,12 +79,12 @@ interface L2HistoryOptions {
   end: string;
   limit?: string;
   cursor?: string;
-  depth?: string;
   out?: string;
   apiKey?: string;
   format: string;
 }
 
+// Every full-depth checkpoint carries the whole book; the route takes no depth.
 export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
@@ -99,7 +99,6 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
   const limit = parseLimit(options.limit);
-  const depth = parsePositiveInt(options.depth, 'depth');
 
   if (start >= end) {
     exitError('--start must be before --end', EXIT.VALIDATION);
@@ -111,7 +110,6 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
     const exchangeClient = getExchangeClient(client, exchange, apiKey);
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
-    if (depth) sdkParams.depth = depth;
     if (options.cursor) sdkParams.cursor = options.cursor;
 
     const result = await (exchangeClient as any).l2Orderbook.history(options.symbol, sdkParams);

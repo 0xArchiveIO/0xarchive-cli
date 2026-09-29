@@ -269,7 +269,6 @@ export async function spotTrades(
   options: BaseFormatOpts & {
     start?: string;
     end?: string;
-    user?: string;
     limit?: string;
     cursor?: string;
     out?: string;
@@ -311,9 +310,6 @@ export async function spotTrades(
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
-    // The /spot/trades endpoint accepts `user` as a server-side filter.
-    // The SDK forwards arbitrary keys via the params object as querystring.
-    if (options.user) sdkParams.user = options.user;
 
     const result = await client.spot.trades.list(symbol, sdkParams as any);
     const trades = result.data;
@@ -406,9 +402,6 @@ export async function spotOrdersHistory(
   options: BaseFormatOpts & {
     start: string;
     end: string;
-    user?: string;
-    status?: string;
-    orderType?: string;
     limit?: string;
     cursor?: string;
     out?: string;
@@ -430,9 +423,6 @@ export async function spotOrdersHistory(
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
-    if (options.user) sdkParams.user = options.user;
-    if (options.status) sdkParams.status = options.status;
-    if (options.orderType) sdkParams.order_type = options.orderType;
 
     const result = await client.spot.orders.history(symbol, sdkParams as any);
     const orders = result.data;

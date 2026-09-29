@@ -7,10 +7,22 @@ import { candlesCommand } from './commands/candles.js';
 import { fundingCurrentCommand, fundingHistoryCommand } from './commands/funding.js';
 import { oiCurrentCommand, oiHistoryCommand } from './commands/openinterest.js';
 import { instrumentsCommand } from './commands/instruments.js';
-import { liquidationsCommand, liquidationsVolumeCommand, liquidationsUserCommand } from './commands/liquidations.js';
+import {
+  liquidationsCommand,
+  liquidationsVolumeCommand,
+  liquidationsUserCommand,
+  liquidationsLevelsCommand,
+  liquidationsLevelsHistoryCommand,
+} from './commands/liquidations.js';
 import { summaryCommand } from './commands/summary.js';
 import { pricesCommand } from './commands/prices.js';
-import { ordersHistoryCommand, ordersFlowCommand, ordersTpslCommand } from './commands/orders.js';
+import {
+  ordersHistoryCommand,
+  ordersFlowCommand,
+  ordersTpslCommand,
+  ordersTriggerLevelsCommand,
+  ordersTriggerLevelsHistoryCommand,
+} from './commands/orders.js';
 import { l4GetCommand, l4DiffsCommand, l4HistoryCommand } from './commands/l4.js';
 import { l2GetCommand, l2HistoryCommand, l2DiffsCommand } from './commands/l2.js';
 import { l3GetCommand, l3HistoryCommand } from './commands/l3.js';
@@ -34,7 +46,39 @@ import {
   hip4L4History,
   hip4OutcomesList,
   hip4OutcomesGet,
+  hip4QuestionsList,
+  hip4QuestionsGet,
 } from './commands/hip4.js';
+import { hip3OracleExternalPrice, hip3OracleDiscoveryBounds } from './commands/hip3.js';
+import { breadthCurrentCommand, breadthHistoryCommand } from './commands/breadth.js';
+import { cvdCommand } from './commands/cvd.js';
+import { walletsClassifyCommand, WALLET_SORTS } from './commands/wallets.js';
+import { symbolsCommand } from './commands/symbols.js';
+import { streamReplayCommand } from './commands/replay.js';
+import {
+  webhooksEventTypesCommand,
+  webhooksLimitsCommand,
+  webhooksEndpointsListCommand,
+  webhooksEndpointsCreateCommand,
+  webhooksEndpointsDeleteCommand,
+  webhooksEndpointsEnableCommand,
+  webhooksEndpointsRotateSecretCommand,
+  webhooksEndpointsTestCommand,
+  webhooksEndpointsDeliveriesCommand,
+  webhooksRedeliverCommand,
+  webhooksSubscriptionsListCommand,
+  webhooksSubscriptionsCreateCommand,
+  webhooksSubscriptionsUpdateCommand,
+  webhooksSubscriptionsDeleteCommand,
+  webhooksSubscriptionsResumeCommand,
+  webhooksSubscriptionsResumeAllCommand,
+  webhooksEstimateCommand,
+  webhooksDryRunCommand,
+  webhooksAddressesListCommand,
+  webhooksAddressesAddCommand,
+  webhooksAddressesDeleteCommand,
+  webhooksVerifyCommand,
+} from './commands/webhooks.js';
 import {
   streamLiquidationsCommand,
   streamTradesCommand,
@@ -73,10 +117,23 @@ const EXCHANGE_DESC =
   'lighter is Lighter mainnet and rh-lighter is Lighter on Robinhood Chain (USDG-quoted; spot symbols are dashed, e.g. AAPL-USDG). ' +
   'For hip4, coins are bare numerics (e.g. "0", "1", "42"); legacy "#0" / "%230" forms are also accepted. mark_price is an implied probability (0..1), not a USD price.';
 
+const HL_EXCHANGE_DESC = 'Exchange: hyperliquid or hip3';
+
+const LEVEL_RANGE_DESC = 'Percentage range around the mid price, 1 to 50 (default 10)';
+const LEVEL_BUCKETS_DESC = 'Number of price buckets, 10 to 200 (default 50)';
+const LEVEL_SIDE_DESC = 'Keep one side: bid, buy, or B (longs / bids); ask, sell, or A (shorts / asks)';
+
+/** Repeatable string option: --secret a --secret b. */
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 const POSITIONS_EXCHANGE_DESC =
   'Exchange: hyperliquid, hip3, lighter (Lighter mainnet), or rh-lighter (Lighter on Robinhood Chain)';
 
-const program = new Command()
+// The command tree. `src/bin.ts` parses process.argv with it; tests import it
+// to parse argument vectors directly.
+export const program = new Command()
   .name('oxa')
   .description('0xArchive CLI — Query historical crypto market data')
   .version(VERSION);
@@ -173,6 +230,52 @@ program
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(candlesCommand);
 
+// ── oxa breadth current / history ───────────────────────────────────────
+
+const breadth = program
+  .command('breadth')
+  .description('Market breadth above the current UTC-session VWAP (Hyperliquid and HIP-3)');
+
+breadth
+  .command('current')
+  .description('Get the latest breadth snapshot. valuePct is null when no instrument is eligible, never 0.')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthCurrentCommand);
+
+breadth
+  .command('history')
+  .description('Get breadth snapshots in ascending order. Downsampling keeps the last snapshot in each bucket.')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to the route window')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Downsampling interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d')
+  .option('--limit <n>', 'Snapshots per page, 1 to 1000')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthHistoryCommand);
+
+// ── oxa cvd <symbol> ────────────────────────────────────────────────────
+
+program
+  .command('cvd <symbol>')
+  .description(
+    'Get cumulative volume delta: taker buy and sell notional per bucket, the delta, and a running total that restarts on every page',
+  )
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms). Without it: the newest buckets of the 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Bucket width: 1m, 5m, 15m, 30m, 1h (default), 4h, 1d, 1w')
+  .option('--limit <n>', 'Buckets per page, 1 to 10000 (default 500)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and --interval)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(cvdCommand);
+
 // ── oxa funding current / history ───────────────────────────────────────
 
 const funding = program
@@ -241,6 +344,18 @@ program
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(instrumentsCommand);
 
+// ── oxa symbols ─────────────────────────────────────────────────────────
+
+program
+  .command('symbols')
+  .description('List the public symbol universe with coverage dates and data types, across every venue')
+  .option('--exchange <exchange>', 'Keep one venue family: hyperliquid, hip3, hip4, spot, lighter, or rh-lighter')
+  .option('--symbol <symbol>', 'Keep one symbol (exact match; a bare HIP-4 number also matches #<n>)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(symbolsCommand);
+
 // ── oxa liquidations history / volume / user ────────────────────────────
 
 const liquidations = program
@@ -294,6 +409,39 @@ liquidations
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(liquidationsUserCommand);
+
+liquidations
+  .command('levels')
+  .description(
+    'Get projected forced-liquidation levels around the mark price (Hyperliquid and HIP-3; snapshots about every 5 minutes, history from 2026-07-27)',
+  )
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, xyz:TSLA)')
+  .option('--range-pct <n>', LEVEL_RANGE_DESC)
+  .option('--buckets <n>', LEVEL_BUCKETS_DESC)
+  .option('--side <side>', LEVEL_SIDE_DESC)
+  .option('--at <time>', 'Point-in-time read (ISO 8601 or Unix ms): the newest snapshot at or before it')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(liquidationsLevelsCommand);
+
+liquidations
+  .command('levels-history')
+  .description('Get liquidation-levels snapshots over a time range, oldest first (Hyperliquid and HIP-3)')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Coin symbol (e.g. BTC, xyz:TSLA)')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--summary', 'List snapshots without their price buckets')
+  .option('--range-pct <n>', LEVEL_RANGE_DESC)
+  .option('--buckets <n>', LEVEL_BUCKETS_DESC)
+  .option('--side <side>', LEVEL_SIDE_DESC)
+  .option('--limit <n>', 'Snapshots per page, 1 to 100 (default 24)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(liquidationsLevelsHistoryCommand);
 
 // ── oxa summary ─────────────────────────────────────────────────────────
 
@@ -364,8 +512,8 @@ orders
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--interval <interval>', 'Bucket width: 1m, 5m, 15m, 1h', '1h')
-  .option('--limit <n>', 'Maximum number of buckets, oldest first (default 1000, max 10000)')
-  .option('--cursor <cursor>', 'Resume point in Unix ms: the response starts at the first bucket that opens after it')
+  .option('--limit <n>', 'Buckets per page (default 1000, max 10000)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and --interval)')
   .option('--out <path>', 'Write JSON output to file')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
@@ -386,6 +534,38 @@ orders
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(ordersTpslCommand);
+
+orders
+  .command('trigger-levels')
+  .description(
+    'Get pending stop-loss and take-profit trigger orders grouped into price buckets (Hyperliquid and HIP-3)',
+  )
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, xyz:TSLA)')
+  .option('--range-pct <n>', LEVEL_RANGE_DESC)
+  .option('--buckets <n>', LEVEL_BUCKETS_DESC)
+  .option('--side <side>', LEVEL_SIDE_DESC)
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(ordersTriggerLevelsCommand);
+
+orders
+  .command('trigger-levels-history')
+  .description('Get trigger-levels snapshots over a time range, oldest first (15-minute cadence from 2026-07-27)')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, xyz:TSLA)')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--summary', 'List snapshots without their price buckets')
+  .option('--range-pct <n>', LEVEL_RANGE_DESC)
+  .option('--buckets <n>', LEVEL_BUCKETS_DESC)
+  .option('--side <side>', LEVEL_SIDE_DESC)
+  .option('--limit <n>', 'Snapshots per page, 1 to 100 (default 24)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(ordersTriggerLevelsHistoryCommand);
 
 // ── oxa l4 get / diffs / history ────────────────────────────────────────
 
@@ -451,14 +631,13 @@ l2
 
 l2
   .command('history')
-  .description('Get L2 all-level orderbook checkpoints')
+  .description('Get L2 all-level orderbook checkpoints (every checkpoint carries the full book)')
   .requiredOption('--exchange <exchange>', EXCHANGE_DESC)
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH, km:US500)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
-  .option('--depth <n>', 'Number of price levels per side')
   .option('--out <path>', 'Write JSON output to file')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
@@ -489,17 +668,18 @@ l3
   .description('Get Lighter L3 orderbook snapshot')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
   .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
+  .option('--account <index>', 'Only the orders owned by this Lighter account index')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(l3GetCommand);
 
 l3
   .command('history')
-  .description('Get historical Lighter L3 orderbook snapshots')
+  .description('Get historical Lighter L3 orderbook snapshots (up to 250 orders per side each)')
   .requiredOption('--symbol <symbol>', 'Trading symbol (e.g. BTC, ETH)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--depth <n>', 'Maximum orders per side (Lighter cap: 250)')
+  .option('--account <index>', 'Only the orders owned by this Lighter account index')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -562,6 +742,28 @@ hip4Outcomes
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action((outcomeId: string, options: { apiKey?: string; format: string }) =>
     hip4OutcomesGet(outcomeId, options),
+  );
+
+const hip4Questions = hip4
+  .command('questions')
+  .description('HIP-4 questions: binary outcomes grouped under one ballot, with a fallback outcome');
+
+hip4Questions
+  .command('list')
+  .description('List HIP-4 questions, one page at a time')
+  .option('--limit <n>', 'Questions per page, 1 to 1000 (default 100)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip4QuestionsList);
+
+hip4Questions
+  .command('get <question_id>')
+  .description('Get one HIP-4 question: its named outcomes, fallback outcome, and settled outcomes')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action((questionId: string, options: { apiKey?: string; format: string }) =>
+    hip4QuestionsGet(questionId, options),
   );
 
 hip4
@@ -697,8 +899,8 @@ hip4Orders
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--interval <interval>', 'Bucket width: 1m, 5m, 15m, 1h', '1h')
-  .option('--limit <n>', 'Maximum number of buckets, oldest first (default 1000, max 10000)')
-  .option('--cursor <cursor>', 'Resume point in Unix ms: the response starts at the first bucket that opens after it')
+  .option('--limit <n>', 'Buckets per page (default 1000, max 10000)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and --interval)')
   .option('--out <path>', 'Write JSON output to file')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
@@ -755,13 +957,39 @@ hip4L4
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(hip4L4History);
 
+// ── oxa hip3 ────────────────────────────────────────────────────────────
+// HIP-3 builder-market reads with no shared-verb equivalent. Symbols keep
+// their builder prefix and case (e.g. km:US500).
+
+const hip3 = program
+  .command('hip3')
+  .description('HIP-3 builder markets. Symbols keep their builder prefix and case, e.g. km:US500.');
+
+const hip3Oracle = hip3
+  .command('oracle')
+  .description('HIP-3 oracle reads: the deployer-pushed external price and the discovery bounds');
+
+hip3Oracle
+  .command('external-price <symbol>')
+  .description('Get the latest deployer-pushed external price and the mark price (either can be null)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip3OracleExternalPrice);
+
+hip3Oracle
+  .command('discovery-bounds <symbol>')
+  .description('Get the instantaneous discovery bounds around the reference price')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(hip3OracleDiscoveryBounds);
+
 // ── oxa stream <channel> <symbol> ───────────────────────────────────────
 // Realtime WebSocket streaming. Emits one JSON record per stdout line
 // (NDJSON) until the user hits Ctrl-C or --duration-ms expires.
 
 const stream = program
   .command('stream')
-  .description('Stream realtime market data over WebSocket (requires Node 22+)');
+  .description('Stream live market data, or replay stored data, over WebSocket (requires Node 22+)');
 
 stream
   .command('liquidations <symbol>')
@@ -806,10 +1034,12 @@ stream
 // Generic channel subscription. Use this for spot (spot_orderbook,
 // spot_trades, spot_l4_diffs, spot_l4_orders, spot_twap), Lighter mainnet
 // (lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding),
-// Lighter on Robinhood Chain (the same four with an rh_ prefix) and any other
-// raw WebSocket channel name not covered by the dedicated verbs above.
-// lighter_candles, lighter_l3_orderbook and rh_lighter_candles are
-// replay-only and are rejected before a socket is opened.
+// Lighter on Robinhood Chain (the same four with an rh_ prefix), the
+// full-depth books (orderbook_full, hip3_orderbook_full), HIP-4 (hip4_trades,
+// hip4_l4_diffs, hip4_l4_orders) and any other raw WebSocket channel name not
+// covered by the dedicated verbs above. lighter_candles, lighter_l3_orderbook,
+// rh_lighter_candles, hip4_orderbook and hip4_open_interest are served from
+// stored data only and are rejected before a socket is opened.
 stream
   .command('subscribe <channel> <symbol>')
   .description(
@@ -818,7 +1048,9 @@ stream
       'Symbols are dashed canonical for spot (HYPE-USDC, PURR-USDC). ' +
       'For Lighter: lighter_orderbook, lighter_trades, lighter_open_interest, lighter_funding; ' +
       'for Lighter on Robinhood Chain: rh_lighter_orderbook, rh_lighter_trades, rh_lighter_open_interest, rh_lighter_funding ' +
-      '(lighter_candles, lighter_l3_orderbook, and rh_lighter_candles are replay-only).',
+      '(lighter_candles, lighter_l3_orderbook, and rh_lighter_candles are replay-only). ' +
+      'Full-depth L2 books: orderbook_full, hip3_orderbook_full (an l4_snapshot with every level, then l4_batch changes). ' +
+      'HIP-4: hip4_trades, hip4_l4_diffs, hip4_l4_orders.',
   )
   .option(
     '--interval-ms <ms>',
@@ -829,6 +1061,21 @@ stream
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
   .action(streamGenericCommand);
+
+stream
+  .command('replay <channel> <symbol>')
+  .description(
+    'Replay stored data over WebSocket with its original timing, as NDJSON, until the replay completes. ' +
+      'Live-only channels (full-depth books, Spot, ticker, and HIP-3, HIP-4, and Spot L4) are refused before connecting.',
+  )
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
+  .option('--speed <n>', 'Playback speed multiplier (default 1, real time); the plan sets the maximum')
+  .option('--interval <interval>', 'Candle channels only: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w')
+  .option('--url <url>', 'Override WebSocket URL (or set OXA_WS_URL env var)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
+  .action(streamReplayCommand);
 
 // ── oxa spot ────────────────────────────────────────────────────────────
 // Hyperliquid Spot. Symbols are dashed canonical (HYPE-USDC, PURR-USDC).
@@ -880,10 +1127,9 @@ spot
 
 spot
   .command('trades <symbol>')
-  .description('Fetch spot trade history (S3 backfill from 2025-03-22). Requires --start and --end.')
+  .description('Fetch spot trade history (from 2025-03-22). Requires --start and --end.')
   .option('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .option('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--user <address>', 'Filter by user wallet address')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -902,12 +1148,9 @@ spot
 
 spot
   .command('orders <symbol>')
-  .description('Get spot order lifecycle history (live from 2026-05-05)')
+  .description('Get spot order lifecycle history (live from 2026-05-05; time range and cursor only)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
-  .option('--user <address>', 'Filter by user wallet address')
-  .option('--status <status>', 'Filter by status: open, filled, cancelled, expired')
-  .option('--order-type <type>', 'Filter by type: limit, market, trigger, tpsl')
   .option('--limit <n>', 'Maximum records to return')
   .option('--cursor <cursor>', 'Pagination cursor from previous response')
   .option('--out <path>', 'Write JSON output to file')
@@ -1096,4 +1339,240 @@ accounts
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(accountsByL1Command);
 
-program.parse();
+// ── oxa wallets classify ────────────────────────────────────────────────
+
+const wallets = program
+  .command('wallets')
+  .description('Wallet classification: precomputed daily behavioral metrics (Hyperliquid and HIP-3)');
+
+wallets
+  .command('classify')
+  .description('Classify active wallets for one daily snapshot (yesterday by default), with filters, sorting, and offset paging')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--min-orders <n>', 'Minimum order count (default 100)')
+  .option('--min-volume-usd <usd>', 'Minimum fill volume in USD (default 0)')
+  .option('--sort <metric>', `Sort metric (default total_orders): ${WALLET_SORTS.join(', ')}`)
+  .option('--order <order>', 'Sort order: asc or desc (default desc)')
+  .option('--uses-twap <bool>', 'Only wallets that do (true) or do not (false) use TWAP orders')
+  .option('--uses-priority-gas <bool>', 'Only wallets that do (true) or do not (false) pay priority gas')
+  .option('--min-cancel-rate <rate>', 'Minimum cancel rate, 0 to 1')
+  .option('--max-cancel-rate <rate>', 'Maximum cancel rate, 0 to 1')
+  .option('--date <yyyy-mm-dd>', 'Snapshot date in UTC (defaults to yesterday)')
+  .option('--limit <n>', 'Wallets per page, 1 to 1000 (default 100)')
+  .option('--offset <n>', 'Page offset, 0 to 100000 (default 0)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(walletsClassifyCommand);
+
+// ── oxa webhooks ... ────────────────────────────────────────────────────
+// Endpoints, subscriptions, watched wallets, previews, and delivery
+// verification. Deleting and rotating ask for confirmation (or --yes).
+
+const webhooks = program
+  .command('webhooks')
+  .description('Webhooks: endpoints, subscriptions, watched wallets, previews, deliveries, and signature verification');
+
+const API_KEY_DESC = 'API key (or set OXA_API_KEY env var)';
+const FORMAT_DESC = 'Output format: json or pretty';
+const YES_DESC = 'Skip the confirmation prompt';
+
+webhooks
+  .command('event-types')
+  .description('List every event type with the filters, parameters, metrics, and operators it accepts')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEventTypesCommand);
+
+webhooks
+  .command('limits')
+  .description('Show what your plan allows for webhooks, what is in use, and today\'s delivery budget')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksLimitsCommand);
+
+const endpoints = webhooks.command('endpoints').description('Delivery endpoints: your URL plus its signing secret');
+
+endpoints
+  .command('list')
+  .description('List your endpoints, oldest first (secrets are never listed)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsListCommand);
+
+endpoints
+  .command('create')
+  .description('Create an endpoint. Its signing secret is shown once, in this response.')
+  .requiredOption('--url <url>', 'HTTPS URL that receives deliveries')
+  .option('--description <text>', 'Your own label for the endpoint')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsCreateCommand);
+
+endpoints
+  .command('delete <endpoint_id>')
+  .description('Delete an endpoint and every subscription that points at it')
+  .option('--yes', YES_DESC)
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsDeleteCommand);
+
+endpoints
+  .command('enable <endpoint_id>')
+  .description('Put a disabled endpoint back into service (missed events are not replayed)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsEnableCommand);
+
+endpoints
+  .command('rotate-secret <endpoint_id>')
+  .description('Rotate the signing secret. The new one is shown once; the previous one keeps verifying for 24 hours.')
+  .option('--yes', YES_DESC)
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsRotateSecretCommand);
+
+endpoints
+  .command('test <endpoint_id>')
+  .description('Queue a signed webhook.test delivery (counts against today\'s delivery budget)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsTestCommand);
+
+endpoints
+  .command('deliveries <endpoint_id>')
+  .description('List an endpoint\'s delivery log, newest first, with each payload as signed')
+  .option('--limit <n>', 'Deliveries to return, 1 to 200 (default 50)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEndpointsDeliveriesCommand);
+
+webhooks
+  .command('redeliver <delivery_id>')
+  .description('Queue a past delivery again with the same event id (counts against today\'s delivery budget)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksRedeliverCommand);
+
+const subscriptions = webhooks
+  .command('subscriptions')
+  .description('Subscriptions: one event type and configuration, delivered to one endpoint');
+
+subscriptions
+  .command('list')
+  .description('List your subscriptions with their configuration and pause state')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsListCommand);
+
+subscriptions
+  .command('create')
+  .description('Create a subscription. Filters are validated against the event type\'s catalog entry.')
+  .requiredOption('--endpoint <endpoint_id>', 'Endpoint that receives the deliveries')
+  .requiredOption('--event-type <type>', 'Event type, e.g. market.liquidation (see `oxa webhooks event-types`)')
+  .option('--filters <json>', 'Configuration as a JSON object, e.g. \'{"venue":"hyperliquid","min_notional_usd":250000}\'')
+  .option('--filters-file <path>', 'Read the configuration JSON from a file')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsCreateCommand);
+
+subscriptions
+  .command('update <subscription_id>')
+  .description('Replace a subscription\'s configuration, switch it on or off, or both')
+  .option('--filters <json>', 'Replacement configuration as a JSON object (replaces the stored one)')
+  .option('--filters-file <path>', 'Read the replacement configuration JSON from a file')
+  .option('--enabled <bool>', 'true or false')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsUpdateCommand);
+
+subscriptions
+  .command('delete <subscription_id>')
+  .description('Delete a subscription (its endpoint and other subscriptions are untouched)')
+  .option('--yes', YES_DESC)
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsDeleteCommand);
+
+subscriptions
+  .command('resume <subscription_id>')
+  .description('Put one paused subscription back into service; the result carries the missed window')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsResumeCommand);
+
+subscriptions
+  .command('resume-all')
+  .description('Put every paused subscription back into service in one call')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksSubscriptionsResumeAllCommand);
+
+webhooks
+  .command('estimate')
+  .description('Estimate how often a rule would have fired over 1 to 30 days, without creating it (every plan)')
+  .requiredOption('--event-type <type>', 'Event type to evaluate')
+  .option('--config <json>', 'Configuration as a JSON object, as for a subscription\'s filters')
+  .option('--config-file <path>', 'Read the configuration JSON from a file')
+  .option('--lookback-days <n>', 'Days of history, 1 to 30 (default 7)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksEstimateCommand);
+
+webhooks
+  .command('dry-run')
+  .description('List the occurrences a rule would have delivered over a recent window, without creating it (every plan)')
+  .requiredOption('--event-type <type>', 'Event type to evaluate')
+  .option('--config <json>', 'Configuration as a JSON object, as for a subscription\'s filters')
+  .option('--config-file <path>', 'Read the configuration JSON from a file')
+  .option('--lookback-s <seconds>', 'Seconds of history, 60 to 86400 (default 3600)')
+  .option('--limit <n>', 'Occurrences to return, newest first, 1 to 200 (default 100)')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksDryRunCommand);
+
+const addresses = webhooks
+  .command('addresses')
+  .description('Watched wallets: the addresses in scope for address-scoped events such as account.fill');
+
+addresses
+  .command('list')
+  .description('List your watched wallets and how many your plan allows')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksAddressesListCommand);
+
+addresses
+  .command('add')
+  .description('Watch a wallet (adding one you already watch returns the existing entry)')
+  .requiredOption('--address <address>', 'Wallet address, 0x followed by 40 hex characters')
+  .option('--label <text>', 'Your own label, at most 64 characters')
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksAddressesAddCommand);
+
+addresses
+  .command('delete <address_id>')
+  .description('Stop watching a wallet (subscriptions that name it keep their stored filters)')
+  .option('--yes', YES_DESC)
+  .option('--api-key <key>', API_KEY_DESC)
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksAddressesDeleteCommand);
+
+webhooks
+  .command('verify')
+  .description(
+    'Verify a delivery\'s 0xa-signature against its raw body (from --body-file or stdin). No API key needed; the secret is never printed.',
+  )
+  .requiredOption('--signature <value>', 'The 0xa-signature header value, e.g. t=1758240000,v1=...')
+  .option(
+    '--secret <secret>',
+    'Endpoint signing secret; repeat during a rotation to accept either (or set OXA_WEBHOOK_SECRET)',
+    collect,
+    [] as string[],
+  )
+  .option('--body-file <path>', 'File holding the raw request body, byte for byte (default: read stdin)')
+  .option('--tolerance <seconds>', 'Replay window in seconds around the signing time (default 300)')
+  .option('--ignore-timestamp', 'Skip the replay window, for a stored delivery or a test vector')
+  .option('--format <format>', FORMAT_DESC, 'json')
+  .action(webhooksVerifyCommand);

@@ -4,6 +4,7 @@ import {
   requireExchange,
   createClient,
   getExchangeClient,
+  exchangeLabel,
   type Exchange,
 } from '../lib/client.js';
 import {
@@ -19,6 +20,9 @@ import {
 import { handleError } from '../lib/errors.js';
 import { parseTimestamp, parseLimit } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
+import { getTriggerLevelsResource, hyperliquidVenue } from '../lib/sdk.js';
+import { levelHistoryParams, levelParams, type LevelHistoryOptions, type LevelOptions } from '../lib/levels.js';
+import { cell, emitDocument, emitPage, field, printMore, toPage } from '../lib/emit.js';
 
 // ── oxa orders history ──────────────────────────────────────────────────
 
@@ -161,11 +165,14 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         records: data.length,
         exchange,
         symbol: options.symbol,
+        has_more: !!result.nextCursor,
+        nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} Order Flow (${exchange})`);
         prettyField('Records', data.length);
         prettyField('Written to', options.out);
+        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
@@ -176,6 +183,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         prettyDim('No order flow data found.');
       } else {
         outputJson(envelope);
+        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
       }
       process.stdout.write('\n');
     } else {
@@ -273,6 +281,103 @@ export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<voi
       outputJson(envelope);
     }
 
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+// ── oxa orders trigger-levels / trigger-levels-history ──────────────────
+// Pending stop-loss and take-profit trigger orders grouped into price buckets
+// (Hyperliquid and HIP-3). History is kept at a 15-minute cadence from
+// 2026-07-27. These are voluntary trigger orders, not projected forced
+// liquidations; see `oxa liquidations levels` for those.
+
+interface TriggerLevelsOptions extends LevelOptions {
+  exchange: string;
+  symbol: string;
+  apiKey?: string;
+  format: string;
+}
+
+interface TriggerLevelsHistoryOptions extends LevelHistoryOptions {
+  exchange: string;
+  symbol: string;
+  out?: string;
+  apiKey?: string;
+  format: string;
+}
+
+export async function ordersTriggerLevelsCommand(options: TriggerLevelsOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const venue = hyperliquidVenue(options.exchange, 'trigger levels');
+  const params = levelParams(options);
+  const apiKey = resolveApiKey(options.apiKey);
+  const client = createClient(apiKey);
+
+  const triggers = getTriggerLevelsResource(client, venue);
+  try {
+    const snapshot = await triggers.triggerLevels(options.symbol, params);
+    emitDocument(snapshot, { format }, () => {
+      prettyHeader(`${options.symbol} Trigger Levels (${exchangeLabel(venue)})`);
+      prettyField('As of', field(snapshot, 'asOf', 'as_of') as string | undefined);
+      prettyField('Mid price', field(snapshot, 'midPrice', 'mid_price') as number | undefined);
+      prettyField('Total bid size', field(snapshot, 'totalBidSize', 'total_bid_size') as number | undefined);
+      prettyField('Total ask size', field(snapshot, 'totalAskSize', 'total_ask_size') as number | undefined);
+      const levels = field(snapshot, 'levels');
+      const rows = (Array.isArray(levels) ? levels : []).map((b) => [
+        cell(field(b, 'priceBucket', 'price_bucket')),
+        cell(field(b, 'bidCount', 'bid_count')),
+        cell(field(b, 'bidSize', 'bid_size')),
+        cell(field(b, 'askCount', 'ask_count')),
+        cell(field(b, 'askSize', 'ask_size')),
+      ]);
+      if (rows.length === 0) {
+        prettyDim('No pending trigger orders in this range.');
+      } else {
+        prettyTable(['Price Bucket', 'Bid Orders', 'Bid Size', 'Ask Orders', 'Ask Size'], rows);
+      }
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
+}
+
+export async function ordersTriggerLevelsHistoryCommand(options: TriggerLevelsHistoryOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const venue = hyperliquidVenue(options.exchange, 'trigger levels');
+  const params = levelHistoryParams(options);
+  const apiKey = resolveApiKey(options.apiKey);
+  const client = createClient(apiKey);
+
+  const triggers = getTriggerLevelsResource(client, venue);
+  try {
+    const result = await triggers.triggerLevelsHistory(options.symbol, params);
+    const page = toPage(result);
+    const snapshots = Array.isArray(page.data) ? page.data : [];
+    emitPage(page, { format, out: options.out }, { exchange: venue, symbol: options.symbol }, () => {
+      prettyHeader(`${options.symbol} Trigger Levels History (${exchangeLabel(venue)}), ${snapshots.length} snapshots`);
+      if (snapshots.length === 0) {
+        prettyDim('No snapshots found.');
+        return;
+      }
+      const shown = snapshots.slice(0, 20);
+      prettyTable(
+        ['Snapshot', 'Mid Price', 'Total Bid Size', 'Total Ask Size', 'Buckets'],
+        shown.map((s) => {
+          const levels = field(s, 'levels');
+          return [
+            cell(field(s, 'snapshotTs', 'snapshot_ts')),
+            cell(field(s, 'midPrice', 'mid_price')),
+            cell(field(s, 'totalBidSize', 'total_bid_size')),
+            cell(field(s, 'totalAskSize', 'total_ask_size')),
+            Array.isArray(levels) ? String(levels.length) : '-',
+          ];
+        }),
+      );
+      printMore(shown.length, snapshots.length, page.nextCursor);
+    });
     process.exit(EXIT.SUCCESS);
   } catch (error) {
     handleError(error, apiKey);

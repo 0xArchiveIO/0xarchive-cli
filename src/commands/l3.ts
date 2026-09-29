@@ -22,20 +22,37 @@ import { writeOutputFile } from '../lib/file.js';
 interface L3GetOptions {
   symbol: string;
   depth?: string;
+  account?: string;
   apiKey?: string;
   format: string;
+}
+
+/** `--account`: only the orders owned by one Lighter account index. */
+function parseAccount(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n)) {
+    exitError(`--account must be a Lighter account index, a non-negative whole number (got ${raw})`, EXIT.VALIDATION);
+  }
+  return n;
 }
 
 export async function l3GetCommand(options: L3GetOptions): Promise<void> {
   const format = validateFormat(options.format);
   const apiKey = resolveApiKey(options.apiKey);
   const depth = parsePositiveInt(options.depth, 'depth');
+  const account = parseAccount(options.account);
 
   const client = createClient(apiKey);
 
   try {
-    const sdkParams = depth ? { depth } : undefined;
-    const data = await (client.lighter as any).l3Orderbook.get(options.symbol, sdkParams);
+    const sdkParams: Record<string, unknown> = {};
+    if (depth) sdkParams.depth = depth;
+    if (account !== undefined) sdkParams.account = account;
+    const data = await (client.lighter as any).l3Orderbook.get(
+      options.symbol,
+      Object.keys(sdkParams).length ? sdkParams : undefined,
+    );
 
     if (format === 'pretty') {
       prettyHeader(`${options.symbol} L3 Orderbook (lighter)`);
@@ -59,7 +76,7 @@ interface L3HistoryOptions {
   symbol: string;
   start: string;
   end: string;
-  depth?: string;
+  account?: string;
   limit?: string;
   cursor?: string;
   out?: string;
@@ -73,7 +90,7 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
   const limit = parseLimit(options.limit);
-  const depth = parsePositiveInt(options.depth, 'depth');
+  const account = parseAccount(options.account);
 
   if (start >= end) {
     exitError('--start must be before --end', EXIT.VALIDATION);
@@ -85,7 +102,7 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
-    if (depth) sdkParams.depth = depth;
+    if (account !== undefined) sdkParams.account = account;
 
     const result = await (client.lighter as any).l3Orderbook.history(options.symbol, sdkParams);
     const snapshots = result.data;

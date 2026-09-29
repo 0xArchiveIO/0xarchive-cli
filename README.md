@@ -4,7 +4,7 @@ Terminal-first access to 0xArchive market data.
 
 0xArchive is granular market data infrastructure for two venues: Hyperliquid and Lighter. Lighter has two deployments: mainnet and Robinhood Chain. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes `--exchange hip3`, `--exchange hip4`, and the `oxa spot` group as convenience scopes for those markets. Lighter mainnet is `--exchange lighter` and Lighter on Robinhood Chain is `--exchange rh-lighter`. Account positions (`oxa positions ...`) cover Hyperliquid, HIP-3, and both Lighter deployments.
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot.
+Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot, plus market breadth, cumulative volume delta, liquidation and trigger levels, the HIP-3 oracle, wallet classification, the symbol list, webhooks, and WebSocket replay.
 
 ## Install
 
@@ -58,6 +58,15 @@ oxa hip4 orderbook get 0
 # List Hyperliquid Spot pairs and inspect one
 oxa spot pairs
 oxa spot pair HYPE-USDC
+
+# Share of HIP-3 markets trading above their session VWAP
+oxa breadth current --exchange hip3 --format pretty
+
+# Hourly cumulative volume delta for BTC
+oxa cvd BTC --exchange hyperliquid --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z
+
+# Every symbol with its coverage dates, for one venue
+oxa symbols --exchange hip3 --format pretty
 
 # Stream live Hyperliquid liquidations (requires Node 22+)
 oxa stream liquidations BTC
@@ -188,6 +197,50 @@ oxa candles --exchange <exchange> --symbol <symbol> --start <time> --end <time> 
 
 HIP-4 candles use `/v1/hyperliquid/hip4/candles/{coin}` with the same candle intervals. Hyperliquid Spot candles use the explicit `oxa spot candles <symbol>` command and the `/v1/hyperliquid/spot/candles/{symbol}` route. Candles for Lighter on Robinhood Chain (`--exchange rh-lighter`) cover 2026-06-26 onward once they are enabled for that deployment; until then the request returns an error.
 
+### `oxa breadth current` and `oxa breadth history`
+
+Market breadth: the percentage of eligible instruments whose price is above their current UTC-session VWAP, on Hyperliquid (`--exchange hyperliquid`) and HIP-3 (`--exchange hip3`). The session resets at 00:00 UTC. Instruments with no session volume, or whose last completed candle is stale, are excluded and counted in `counts`; `coverageRatio` is eligible over candidates. When no instrument is eligible, `valuePct` is `null`, never 0: the JSON output keeps it `null` and pretty output prints `null`. HIP-3 snapshots also carry per-builder counts in `namespaces`. History begins 2026-08-24 on Hyperliquid and 2026-08-28 on HIP-3.
+
+```bash
+oxa breadth current --exchange hyperliquid
+oxa breadth history --exchange hip3 --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z --interval 1h
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--start` | No (`history`) | Start time (ISO 8601 or Unix ms); defaults to the route window |
+| `--end` | No (`history`) | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No (`history`) | Downsampling: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`. Each bucket keeps its last snapshot; percentages are never averaged. |
+| `--limit` | No (`history`) | Snapshots per page, 1 to 1,000 |
+| `--cursor` | No (`history`) | Pagination cursor from the previous response |
+| `--out` | No (`history`) | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa cvd`
+
+Cumulative volume delta for one market on Hyperliquid or HIP-3: taker buy and sell notional per bucket (`buyVolume`, `sellVolume`), their difference (`delta`), and a running total (`cumulativeDelta`). Buckets are labelled by their open time in UTC (`timestamp`, Unix ms) and are omitted when they hold no trades.
+
+```bash
+oxa cvd <symbol> --exchange <exchange> [options]
+oxa cvd BTC --exchange hyperliquid --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z --interval 5m
+oxa cvd km:US500 --exchange hip3
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `<symbol>` | Yes | Market symbol (HIP-3 symbols keep their prefix and case, e.g. `km:US500`) |
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--start` | No | Start time (ISO 8601 or Unix ms). Without it, the response is the newest buckets of the 24 hours before `--end`, with no cursor. |
+| `--end` | No | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No | `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d`, `1w` |
+| `--limit` | No | Buckets per page, 1 to 10,000 (default 500) |
+| `--cursor` | No | Pagination cursor (`nextCursor` from the previous response) |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+While the response carries `nextCursor`, run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval`. Below `1h` a page can hold fewer than `--limit` buckets and still carry a cursor, so stop on the cursor, not on a short page. `cumulativeDelta` restarts on every page: rebuild it from `delta` when joining pages. A response that is one page of several says so in `meta.notice`.
+
 ### `oxa funding current`
 
 Get the current funding rate.
@@ -254,6 +307,23 @@ List all available instruments/coins on an exchange.
 oxa instruments --exchange <exchange> [--format <format>]
 ```
 
+### `oxa symbols`
+
+List the public symbol universe across every venue: each entry's venue family (`exchange`: `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter`, or `rh-lighter`), coverage start and end, data types, the earliest coverage per data type (`coverageByType`), and the estimated size per day per data type (`sizePerDay`). HIP-4 entries also carry the slug, outcome pair, display title, and settlement state. The API returns the whole list in one response (every HIP-4 outcome side is an entry, so the full list runs to several megabytes); `--exchange` and `--symbol` filter it locally.
+
+```bash
+oxa symbols --exchange hyperliquid --symbol BTC
+oxa symbols --exchange hip4 --out hip4-symbols.json
+oxa symbols | jq '[.[] | select(.exchange == "spot")] | length'
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | No | Keep one venue family: `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter`, or `rh-lighter` |
+| `--symbol` | No | Keep one symbol, matched exactly (`km:US500`, `HYPE-USDC`); a bare HIP-4 number such as `0` also matches `#0` |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
 ### `oxa liquidations history`
 
 Get liquidation history for Hyperliquid, HIP-3, and both Lighter deployments. Lighter mainnet liquidations are served from 2026-06-10 and Lighter on Robinhood Chain liquidations from 2026-06-26 20:10:26 UTC, the venue's first trade. A Robinhood Chain range before the first liquidation (2026-06-27 23:14 UTC) returns no rows rather than an error.
@@ -312,6 +382,33 @@ oxa liquidations user --exchange hyperliquid --user <address> --start <time> --e
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa liquidations levels` and `oxa liquidations levels-history`
+
+Projected forced-liquidation levels on Hyperliquid and HIP-3: the long and short notional (and position counts) that would be liquidated in each price bucket around the mark price, computed from clearinghouse positions and margin state. Snapshots refresh about every five minutes and are kept from 2026-07-27. Each snapshot also carries the total long and short notional at risk and `flaggedNotional`, exposure computed approximately or not bucketed (HIP-3 cross-margin positions). These are projected forced liquidations, not pending trigger orders; see `oxa orders trigger-levels` for those.
+
+```bash
+oxa liquidations levels --exchange hyperliquid --symbol BTC --range-pct 5 --buckets 50
+oxa liquidations levels --exchange hip3 --symbol xyz:TSLA --at 2026-09-01T00:00:00Z
+oxa liquidations levels-history --exchange hyperliquid --symbol BTC \
+  --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z --summary
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--symbol` | Yes | Market symbol |
+| `--range-pct` | No | Percentage range around the mark price, 1 to 50 (default 10) |
+| `--buckets` | No | Number of price buckets, 10 to 200 (default 50) |
+| `--side` | No | Keep one side: `bid`, `buy`, or `B` (longs); `ask`, `sell`, or `A` (shorts). The other side reads zero. |
+| `--at` | No (`levels`) | Point-in-time read (ISO 8601 or Unix ms): the newest snapshot at or before it |
+| `--start` | No (`levels-history`) | Start time; defaults to 24 hours before `--end` |
+| `--end` | No (`levels-history`) | End time; defaults to now |
+| `--summary` | No (`levels-history`) | List snapshots without their price buckets |
+| `--limit` | No (`levels-history`) | Snapshots per page, 1 to 100 (default 24) |
+| `--cursor` | No (`levels-history`) | Pagination cursor from the previous response |
+| `--out` | No (`levels-history`) | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
 ### `oxa summary`
@@ -425,6 +522,33 @@ List the Lighter account indices owned by an L1 (Ethereum) address, with the tot
 oxa accounts by-l1 --l1-address 0xYourL1Address [--limit <n>] [--cursor <cursor>] [--format <format>]
 ```
 
+### `oxa wallets classify`
+
+Precomputed daily behavioral metrics for active wallets on Hyperliquid or HIP-3: order and fill counts, cancel, fill, and maker ratios, order sizes, volume, fees, realized PnL, liquidation count, and TWAP, client order id, builder, and priority-gas usage. Each response covers one daily snapshot (`date`, yesterday by default) with the number of matching wallets (`total`); page with `--offset` and `--limit`. The JSON output is the response as returned: `{ "wallets": [...], "total": ..., "date": ... }`, each wallet with its `address`, `metrics`, and `period`.
+
+```bash
+oxa wallets classify --exchange hyperliquid --sort total_volume_usd --min-orders 1000 --max-cancel-rate 0.5 --limit 100
+oxa wallets classify --exchange hip3 --uses-twap true --date 2026-09-27
+oxa wallets classify --exchange hyperliquid --limit 100 --offset 100
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--min-orders` | No | Minimum order count (default 100) |
+| `--min-volume-usd` | No | Minimum fill volume in USD (default 0) |
+| `--sort` | No | Metric to sort by (default `total_orders`): `total_orders`, `total_fills`, `total_volume`, `total_volume_usd`, `cancel_rate`, `fill_rate`, `maker_ratio`, `avg_order_size_usd`, `avg_order_notional`, `max_order_size_usd`, `max_order_notional`, `active_hours`, `unique_coins`, `total_fees`, `total_fees_usd`, `realized_pnl`, `realized_pnl_usd`, `median_cancel_speed_ms`, `twap_fills`, `total_priority_gas`, `total_priority_gas_paid`, `total_builder_fees`, `total_builder_fees_paid` |
+| `--order` | No | `asc` or `desc` (default) |
+| `--uses-twap` | No | `true` or `false`: only wallets that do, or do not, use TWAP orders |
+| `--uses-priority-gas` | No | `true` or `false`: only wallets that do, or do not, pay priority gas |
+| `--min-cancel-rate` | No | Minimum cancel rate, 0 to 1 |
+| `--max-cancel-rate` | No | Maximum cancel rate, 0 to 1 |
+| `--date` | No | Snapshot date in UTC, `YYYY-MM-DD` (defaults to yesterday) |
+| `--limit` | No | Wallets per page, 1 to 1,000 (default 100) |
+| `--offset` | No | Page offset, 0 to 100,000 (default 0) |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
 ### `oxa outcomes list` (HIP-4 only)
 
 List HIP-4 outcome markets (binary outcome metadata).
@@ -490,12 +614,12 @@ oxa orders flow --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
 | `--interval` | No | Bucket width: `1m`, `5m`, `15m`, `1h` (default) |
-| `--limit` | No | Maximum number of buckets, oldest first (default 1000, max 10000) |
-| `--cursor` | No | Resume point in Unix ms: the response starts at the first bucket that opens after it |
+| `--limit` | No | Buckets per page (default 1000, max 10000) |
+| `--cursor` | No | Pagination cursor (`nextCursor` from the previous response) |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
-Buckets are labelled by their open time in UTC, and buckets with no events are omitted.
+A page holds the oldest `--limit` buckets of the window. While the response carries `nextCursor`, run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval`; stop when it is `null`. Buckets are labelled by their open time in UTC, and buckets with no events are omitted.
 
 ### `oxa orders tpsl`
 
@@ -517,6 +641,18 @@ oxa orders tpsl --exchange <exchange> --symbol <symbol> --start <time> --end <ti
 | `--cursor` | No | Pagination cursor |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
+
+### `oxa orders trigger-levels` and `oxa orders trigger-levels-history`
+
+The pending trigger-order map on Hyperliquid and HIP-3: currently open stop-loss and take-profit trigger orders grouped into price buckets near the mid price, with the order count and size on each side of every bucket. `asOf` is the time the pending state was read. History is kept at a 15-minute cadence from 2026-07-27. These are voluntary trigger orders, not projected forced liquidations; see `oxa liquidations levels` for those. HIP-4 and Spot have no trigger levels.
+
+```bash
+oxa orders trigger-levels --exchange hyperliquid --symbol BTC --range-pct 5
+oxa orders trigger-levels-history --exchange hip3 --symbol xyz:TSLA \
+  --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z --limit 100
+```
+
+The options are those of `oxa liquidations levels` and `levels-history` above, except `--at`: `--exchange`, `--symbol`, `--range-pct`, `--buckets`, and `--side` on both, and `--start`, `--end`, `--summary`, `--limit`, `--cursor`, and `--out` on the history.
 
 ### `oxa l4 get`
 
@@ -590,7 +726,7 @@ oxa l2 get --exchange <exchange> --symbol <symbol> [options]
 
 ### `oxa l2 history`
 
-Get L2 all-level orderbook history over a time range on supported Hyperliquid routes.
+Get L2 all-level orderbook history over a time range on supported Hyperliquid routes. Every checkpoint carries the full book, so the command takes no `--depth`.
 
 ```bash
 oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <time> [options]
@@ -602,7 +738,6 @@ oxa l2 history --exchange <exchange> --symbol <symbol> --start <time> --end <tim
 | `--symbol` | Yes | Trading symbol |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--depth` | No | Number of price levels per side |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--out` | No | Write JSON output to file |
@@ -639,6 +774,7 @@ oxa l3 get --symbol <symbol> [options]
 |--------|----------|-------------|
 | `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
 | `--depth` | No | Maximum orders per side (Lighter cap: 250) |
+| `--account` | No | Only the orders owned by this Lighter account index |
 | `--format` | No | `json` (default) or `pretty` |
 
 **Note:** L3 commands are Lighter-only and do not accept an `--exchange` flag.
@@ -652,6 +788,10 @@ Explicit HIP-4 command surface. Coins are bare numerics (e.g. `0`, `1`, `42`). H
 oxa hip4 instruments
 oxa hip4 outcomes list --settled false
 oxa hip4 outcomes get 0
+
+# Questions: binary outcomes grouped under one ballot
+oxa hip4 questions list --limit 100
+oxa hip4 questions get 1
 
 # Market data
 oxa hip4 orderbook get 0 --depth 10
@@ -674,6 +814,24 @@ oxa hip4 l4 diffs    0 --start ... --end ...
 oxa hip4 l4 history  0 --start ... --end ...
 ```
 
+A question groups binary outcomes under one ballot: one named outcome per choice (`namedOutcomeIds`) plus a fallback outcome (`fallbackOutcomeId`) that resolves Yes when no named choice does. `settledNamedOutcomes` lists the named outcomes that have settled, and outcome ids match `oxa hip4 outcomes`. `oxa hip4 questions list` pages with `--limit` (1 to 1,000, default 100) and `--cursor`.
+
+### `oxa hip3 oracle ...` (HIP-3 oracle)
+
+Oracle reads for a HIP-3 builder market. Symbols keep their builder prefix and case (`km:US500`).
+
+```bash
+oxa hip3 oracle external-price km:US500
+oxa hip3 oracle discovery-bounds km:US500 --format pretty
+```
+
+| Subcommand | Description |
+|---|---|
+| `oxa hip3 oracle external-price <symbol>` | The latest deployer-pushed external reference price (`externalPrice`) with the mark price (`markPrice`); either can be `null` when not available. |
+| `oxa hip3 oracle discovery-bounds <symbol>` | The instantaneous discovery bounds (`lowerBound`, `upperBound`) around the reference price: the external price when available, otherwise the mark price, named in `referenceSource`. Also `maxLeverage` and the fraction applied on each side (`boundFraction`). The full ratcheted range can be wider when deployer-specific reset configuration applies. |
+
+Both carry the source `blockNumber` and `timestamp` (Unix ms).
+
 ### `oxa spot ...` (Hyperliquid Spot)
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route.
@@ -688,7 +846,6 @@ oxa spot pair HYPE-USDC
 # Market data
 oxa spot orderbook HYPE-USDC --depth 10
 oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z
-oxa spot trades HYPE-USDC --start 2026-04-01T00:00:00Z --end 2026-04-01T01:00:00Z --user 0xabc...
 oxa spot candles HYPE-USDC --start 2025-03-22T10:50:22Z --end 2025-03-22T11:50:22Z --interval 1m --limit 1000
 
 # L4 / order lifecycle (live from 2026-05-05)
@@ -709,9 +866,9 @@ oxa spot freshness HYPE-USDC
 | `oxa spot pair <symbol>` | Get a single spot pair |
 | `oxa spot candles <symbol>` | Spot OHLCV candles from 2025-03-22T10:50:22Z; intervals `1m` through `1w`, max 1000 rows |
 | `oxa spot orderbook <symbol>` | Current spot L2 orderbook (live from 2026-05-05) |
-| `oxa spot trades <symbol>` | Spot trade history (S3 backfill from 2025-03-22). Requires `--start`/`--end`; supports `--user` filter. |
+| `oxa spot trades <symbol>` | Spot trade history (from 2025-03-22). Requires `--start`/`--end`. |
 | `oxa spot l4 <symbol>` | Spot L4 orderbook reconstruction |
-| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution |
+| `oxa spot orders <symbol>` | Spot order lifecycle history with user attribution. Takes the time range and cursor only; Spot order history has no user, status, or order-type filters. |
 | `oxa spot twap <symbol>` | TWAP statuses for a single pair |
 | `oxa spot twap-user <user>` | TWAP statuses for a single user wallet across pairs |
 | `oxa spot freshness <symbol>` | Per-symbol freshness across orderbook, trades, L4, TWAP |
@@ -725,7 +882,7 @@ oxa stream trades HYPE-USDC --exchange spot --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription. Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`. Requires Node.js 22+ for the global `WebSocket`.
+Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`. Requires Node.js 22+ for the global `WebSocket`.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
@@ -750,6 +907,17 @@ oxa stream subscribe lighter_open_interest BTC
 oxa stream orderbook AAPL-USDG --exchange rh-lighter --interval-ms 500
 oxa stream trades BTC --exchange rh-lighter
 oxa stream subscribe rh_lighter_funding BTC
+
+# Full-depth L2 books: every price level, then level changes
+oxa stream subscribe orderbook_full BTC
+oxa stream subscribe hip3_orderbook_full km:US500
+
+# HIP-4 outcome markets (coins are bare numerics)
+oxa stream subscribe hip4_trades 0
+oxa stream subscribe hip4_l4_diffs 0
+
+# Replay stored trades at 10x real time, then exit
+oxa stream replay trades BTC --start 2026-09-01T00:00:00Z --end 2026-09-01T01:00:00Z --speed 10
 ```
 
 | Option | Applies to | Description |
@@ -760,6 +928,8 @@ oxa stream subscribe rh_lighter_funding BTC
 | `--duration-ms` | All | Close the stream after N milliseconds and exit with code 0 |
 | `--url` | All | Override the WebSocket URL (or set `OXA_WS_URL`) |
 | `--format` | All | `json` (NDJSON, default) or `pretty` |
+
+`oxa stream subscribe` accepts these channels: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding`, `ticker`, `all_tickers`, `l4_diffs`, `l4_orders`, `orderbook_full` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip3_orderbook_full` (HIP-3); `hip4_trades`, `hip4_l4_diffs`, `hip4_l4_orders` (HIP-4); `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders`, `spot_twap` (Spot); and the four live channels of each Lighter deployment. `hip4_orderbook` and `hip4_open_interest` are served from stored data only; the CLI rejects them before opening a socket and points to `oxa stream replay` and the HIP-4 REST commands.
 
 Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with `is_liquidation: true`. To stop early, send SIGINT (Ctrl-C) or pass `--duration-ms`; both exit with code 0. Any error message from the server (for example an unknown symbol, or a notice that your connection fell behind) is written to stderr and the CLI exits with code 4, so a supervising script can restart the stream. The one exception is a Lighter drop notice, which the CLI reports as a warning while the stream continues (see [Lighter live channels](#lighter-live-channels)).
 
@@ -794,11 +964,124 @@ Symbols are the same as `oxa instruments --exchange lighter` (or `--exchange rh-
 
 If your connection falls behind `lighter_trades` or the stats channels, the server sends an error notice (for example `Dropped ~N live lighter_trades messages for BTC: your connection fell behind the Lighter stream, and those trades were not delivered.`) and keeps the subscription running. The CLI writes that notice to stderr as a warning line (`{"warning":"stream warning: Dropped ~N ...","type":"lag"}`) and keeps streaming; missed trades are not resent. If the lag persists, the server stops the subscription (`Stopped the lighter_trades stream for BTC: your connection is too slow to keep up. Re-subscribe to resume.`) and the CLI exits with code 4, like any other server error.
 
-WebSocket replay of all six Lighter mainnet channels, and of the five Robinhood Chain channels, keeps the existing `historical_data` row shapes, which differ from the live shapes above. The CLI does not start replays; use an SDK or the WebSocket API directly for replay.
+WebSocket replay of all six Lighter mainnet channels, and of the five Robinhood Chain channels, keeps the existing `historical_data` row shapes, which differ from the live shapes above. Start one with `oxa stream replay` (see [Replay](#replay)).
+
+#### Full-depth books and HIP-4 live channels
+
+`orderbook_full` (Hyperliquid) and `hip3_orderbook_full` (HIP-3) stream the full-depth L2 book, every price level rather than the top levels. A subscription starts with one `l4_snapshot` message holding the whole aggregated book (`bids`, `asks`, `bid_count`, `ask_count`, `mid_price`, `spread`, `spread_bps`), followed by `l4_batch` messages whose `data` is an array of level changes. These channels are live only; for full-depth history use `oxa l2 history` and `oxa l2 diffs`.
+
+`hip4_trades`, `hip4_l4_diffs`, and `hip4_l4_orders` are live. Pass HIP-4 coins as bare numerics (`0`, `42`); the CLI sends them to the WebSocket API in its `#0` form. `hip4_l4_diffs` starts with an L4 snapshot of the book.
+
+#### Replay
+
+`oxa stream replay <channel> <symbol> --start <time> --end <time>` replays stored data over one WebSocket connection with its original timing, through the SDK's replay client. Every server message (`replay_started`, the `historical_data` rows, `l4_snapshot` and `l4_batch` pages on the Hyperliquid L4 channels, `gap_detected`, and `replay_completed`) is written to stdout as one JSON record per line, and the command exits with code 0 when the replay completes. A server error exits with code 4.
+
+```bash
+oxa stream replay trades BTC --start 2026-09-01T00:00:00Z --end 2026-09-01T01:00:00Z --speed 10
+oxa stream replay hip3_candles km:US500 --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z --interval 1h --speed 100
+oxa stream replay l4_diffs BTC --start 2026-09-01T00:00:00Z --end 2026-09-01T00:05:00Z
+oxa stream replay lighter_orderbook ETH --start 2026-09-01T00:00:00Z --end 2026-09-01T00:10:00Z --speed 50
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--start` | Yes | Start time (ISO 8601 or Unix ms) |
+| `--end` | Yes | End time (ISO 8601 or Unix ms) |
+| `--speed` | No | Playback speed multiplier (default 1, real time). Your plan sets the maximum. |
+| `--interval` | No | Candle channels only (`candles`, `hip3_candles`, `lighter_candles`, `rh_lighter_candles`): `1m` to `1w` |
+| `--url` | No | Override the WebSocket URL (or set `OXA_WS_URL`) |
+| `--format` | No | `json` (NDJSON, default) or `pretty` |
+
+Replayable channels: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding`, `l4_diffs`, `l4_orders` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Live-only channels are refused before a socket is opened, with a pointer to the REST commands that serve their history: the full-depth books, the HIP-3, HIP-4, and Spot L4 channels, the other Spot channels, `ticker`, and `all_tickers`. Hyperliquid L4 replay (`l4_diffs`, `l4_orders`) starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends events in `l4_batch` pages without speed pacing. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
+
+### `oxa webhooks ...`
+
+Webhooks push events to a URL of yours instead of being polled: liquidations, fills and transfers on wallets you watch, oracle moves, settlements, export jobs finishing, and the rest of the catalog. Deliveries are signed, retried, and logged. Three objects make a working integration: an **endpoint** (your URL plus the signing secret deliveries are signed with), a **subscription** (one event type and configuration, delivered to one endpoint), and a **watched wallet** (an address in scope for address-scoped events such as `account.fill`).
+
+```bash
+# What can be subscribed to, and what the plan allows
+oxa webhooks event-types --format pretty
+oxa webhooks limits --format pretty
+
+# Size a rule against real history before creating it (every plan, including Free)
+oxa webhooks estimate --event-type market.liquidation \
+  --config '{"venue":"hyperliquid","conditions":[{"metric":"notional_usd","op":">=","value":250000}]}' --lookback-days 7
+oxa webhooks dry-run --event-type market.liquidation --config '{"venue":"hyperliquid"}' --lookback-s 86400
+
+# Create an endpoint (the signing secret is shown once), subscribe, and send a test delivery
+oxa webhooks endpoints create --url https://example.com/webhooks/0xarchive --description "trading desk"
+oxa webhooks subscriptions create --endpoint <endpoint_id> --event-type market.liquidation \
+  --filters '{"venue":"hyperliquid","conditions":[{"metric":"notional_usd","op":">=","value":250000}]}'
+oxa webhooks endpoints test <endpoint_id>
+
+# Watch a wallet for address-scoped events
+oxa webhooks addresses add --address 0xYourWallet --label desk
+oxa webhooks subscriptions create --endpoint <endpoint_id> --event-type account.fill --filters '{"min_notional_usd":25000}'
+
+# Deliveries, repeat deliveries, pauses
+oxa webhooks endpoints deliveries <endpoint_id> --limit 20
+oxa webhooks redeliver <delivery_id>
+oxa webhooks subscriptions resume-all
+```
+
+| Command | Description |
+|---|---|
+| `oxa webhooks event-types` | Every event type with the filters, parameters, metrics, and operators it accepts. This is the authority on what a configuration may say. |
+| `oxa webhooks limits` | What the plan allows (endpoints, subscriptions, watched wallets, deliveries per day), what is in use, and how many subscriptions are paused. |
+| `oxa webhooks endpoints list` | Your endpoints, oldest first. Secrets are never listed. |
+| `oxa webhooks endpoints create --url <url> [--description <text>]` | Create an endpoint. The response carries its signing secret, shown only this once. |
+| `oxa webhooks endpoints delete <endpoint_id>` | Delete an endpoint and every subscription that points at it. Asks for confirmation. |
+| `oxa webhooks endpoints enable <endpoint_id>` | Put an endpoint back into service after it was switched off. Events missed while it was off are not replayed. |
+| `oxa webhooks endpoints rotate-secret <endpoint_id>` | Issue a new signing secret, shown once. The previous one keeps verifying for 24 hours, and deliveries in that window carry both signatures. Asks for confirmation. |
+| `oxa webhooks endpoints test <endpoint_id>` | Queue a signed `webhook.test` delivery. It counts against today's delivery budget. |
+| `oxa webhooks endpoints deliveries <endpoint_id> [--limit <n>]` | The delivery log, newest first (1 to 200, default 50), with state, attempts, last status code, error, latency, and the payload as signed. |
+| `oxa webhooks redeliver <delivery_id>` | Queue a past delivery again with the same event id. It counts against today's delivery budget. |
+| `oxa webhooks subscriptions list` | Your subscriptions with their configuration and pause state. |
+| `oxa webhooks subscriptions create --endpoint <id> --event-type <type> [--filters <json>]` | Create a subscription. The configuration is validated against the catalog; an unknown key or an out-of-range value is refused. |
+| `oxa webhooks subscriptions update <subscription_id> [--filters <json>] [--enabled true\|false]` | Replace the configuration, switch the subscription on or off, or both. |
+| `oxa webhooks subscriptions delete <subscription_id>` | Delete one subscription. Asks for confirmation. |
+| `oxa webhooks subscriptions resume <subscription_id>` | Put a paused subscription back into service. The result carries the missed window (`gap.replayWindow`); nothing is buffered while paused. |
+| `oxa webhooks subscriptions resume-all` | Resume every paused subscription in one call. |
+| `oxa webhooks estimate --event-type <type> [--config <json>] [--lookback-days <n>]` | How often a rule would have fired over 1 to 30 days (default 7): a per-day series, the median and busiest day, and the daily rate at other thresholds. |
+| `oxa webhooks dry-run --event-type <type> [--config <json>] [--lookback-s <n>] [--limit <n>]` | The occurrences a rule would have delivered over the last 60 to 86,400 seconds (default 3,600), newest first (1 to 200, default 100). |
+| `oxa webhooks addresses list` | Your watched wallets and how many the plan allows. |
+| `oxa webhooks addresses add --address <0x...> [--label <text>]` | Watch a wallet (label up to 64 characters). Adding one you already watch returns the existing entry. |
+| `oxa webhooks addresses delete <address_id>` | Stop watching a wallet. Subscriptions that name it keep their stored filters. Asks for confirmation. |
+| `oxa webhooks verify --signature <value> --secret <secret> [--body-file <path>]` | Verify a delivery's signature (see below). |
+
+Configurations are wire-shaped JSON objects, passed to the API exactly as written: use `min_notional_usd`, `params.max_age_s`, and `conditions[].metric`, not camelCase spellings. Pass them inline (`--filters`, `--config`) or from a file (`--filters-file`, `--config-file`). The estimate and the dry run validate a configuration exactly as a create does, and share a budget of six calls a minute. Free has no webhook delivery (no endpoints, subscriptions, or watched wallets); the estimate and the dry run are available on every plan.
+
+Deleting an endpoint, a subscription, or a watched wallet, and rotating a secret, ask for confirmation in an interactive terminal. Pass `--yes` to skip the prompt in scripts; without a terminal and without `--yes`, the command changes nothing and exits with code 2.
+
+#### Verifying a delivery
+
+`oxa webhooks verify` checks a delivery's `0xa-signature` header against the raw request body with the SDK's verifier, so you can confirm a receiver's secret and capture pipeline from a terminal. It needs no API key and never prints the secret.
+
+```bash
+# Body saved byte for byte from the request, header value copied from 0xa-signature
+oxa webhooks verify --body-file delivery.json --signature 't=1758240000,v1=027f40e9...' --secret "$WEBHOOK_SECRET"
+
+# Or pipe the body on stdin; during a rotation pass both secrets
+cat delivery.json | oxa webhooks verify --signature "$SIG" --secret "$NEW_SECRET" --secret "$OLD_SECRET"
+
+# A stored delivery is older than the replay window; skip that check deliberately
+oxa webhooks verify --body-file delivery.json --signature "$SIG" --ignore-timestamp
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--signature` | Yes | The `0xa-signature` header value (`t=<seconds>,v1=<hex>`, with a second `v1` during a rotation). A pasted `0xa-signature:` prefix is ignored. |
+| `--secret` | Yes, or `OXA_WEBHOOK_SECRET` | The endpoint's signing secret, the whole `whsec_...` string. Repeat it to accept either of two secrets. |
+| `--body-file` | No | File holding the raw body; without it the body is read from stdin |
+| `--tolerance` | No | Replay window in seconds around the signing time (default 300) |
+| `--ignore-timestamp` | No | Skip the replay window, for a stored delivery or a test vector |
+| `--format` | No | `json` (default) or `pretty` |
+
+On success the command prints `{"valid": true, "eventId": ..., "eventType": ..., "signedAt": ..., "event": {...}}` and exits with code 0. A delivery that does not verify exits with code 2 and names the check that failed: `missing_signature_header`, `malformed_signature_header`, `timestamp_out_of_tolerance`, `no_matching_signature`, or `invalid_payload`. Verify the raw bytes: a body that was parsed and re-serialised, or saved with a trailing newline, does not match its signature.
 
 ### `oxa l3 history`
 
-Get historical Lighter L3 orderbook snapshots over a time range. Lighter only.
+Get historical Lighter L3 orderbook snapshots over a time range. Lighter only. Each snapshot holds up to 250 resting orders per side, so the command takes no `--depth`.
 
 ```bash
 oxa l3 history --symbol <symbol> --start <time> --end <time> [options]
@@ -809,7 +1092,7 @@ oxa l3 history --symbol <symbol> --start <time> --end <time> [options]
 | `--symbol` | Yes | Trading symbol (e.g. BTC, ETH) |
 | `--start` | Yes | Start time (ISO 8601 or Unix ms) |
 | `--end` | Yes | End time (ISO 8601 or Unix ms) |
-| `--depth` | No | Number of price levels per side |
+| `--account` | No | Only the orders owned by this Lighter account index |
 | `--limit` | No | Maximum records to return |
 | `--cursor` | No | Pagination cursor |
 | `--out` | No | Write JSON output to file |
@@ -924,6 +1207,15 @@ oxa positions get --exchange lighter --account 42
 oxa hip4 outcomes list --settled false
 oxa hip4 orderbook get 0 --depth 10
 oxa hip4 trades 0 --recent --limit 50
+
+# Breadth, CVD, and liquidation levels for a quick market read
+oxa breadth current --exchange hyperliquid | jq '.valuePct'
+oxa cvd BTC --exchange hyperliquid --interval 1h --limit 24 | jq '[.data[].delta] | add'
+oxa liquidations levels --exchange hyperliquid --symbol BTC --range-pct 5 | jq '{totalLong, totalShort}'
+
+# Replay an hour of trades as NDJSON
+oxa stream replay trades BTC --start 2026-09-01T00:00:00Z --end 2026-09-01T01:00:00Z --speed 100 \
+  | jq -c 'select(.type == "historical_data") | .data'
 
 # Hyperliquid Spot (dashed canonical symbols)
 oxa spot pairs | jq '.[].symbol' | head
