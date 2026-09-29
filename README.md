@@ -68,9 +68,9 @@ oxa stream orderbook BTC --exchange lighter --duration-ms 10000
 
 ## Choose Your Next Path
 
-- First authenticated route: [Quick Start](https://www.0xarchive.io/docs/quick-start)
-- Full CLI guide: [CLI docs](https://www.0xarchive.io/docs/cli)
-- Claude Code, ChatGPT Codex, and coding-agent workflows: [AI Clients](https://www.0xarchive.io/docs/ai-clients)
+- First authenticated route: [Quick Start](https://docs.0xarchive.io/quickstart)
+- Full CLI guide: [CLI docs](https://docs.0xarchive.io/cli)
+- Claude Code, ChatGPT Codex, and coding-agent workflows: [AI Clients](https://docs.0xarchive.io/ai-clients)
 - File-based pulls: [Data Catalog](https://www.0xarchive.io/data)
 - Plans and limits: [Pricing](https://www.0xarchive.io/pricing)
 - Machine-readable docs: [llms.txt](https://www.0xarchive.io/llms.txt) and [OpenAPI](https://www.0xarchive.io/openapi.json)
@@ -938,11 +938,11 @@ For large-scale data exports (route-specific order books, fill-level trade histo
 
 ## Links
 
-- [API Docs](https://www.0xarchive.io/docs)
+- [API Docs](https://docs.0xarchive.io)
 - [Python SDK](https://pypi.org/project/oxarchive/)
 - [TypeScript SDK](https://npmjs.com/package/@0xarchive/sdk)
 - [Rust SDK](https://crates.io/crates/oxarchive)
-- [MCP Server](https://mcp.0xarchive.io)
+- [MCP Server](https://docs.0xarchive.io/mcp-server)
 - [0xArchive Skill](https://github.com/0xArchiveIO/0xarchive-skill)
 - [Examples](https://github.com/0xArchiveIO/examples)
 

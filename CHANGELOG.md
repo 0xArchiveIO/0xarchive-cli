@@ -21,6 +21,10 @@
 - The HIP-4 funding and liquidations refusals now list every exchange that serves those routes.
 - Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, and Lighter liquidations.
 
+### Documentation
+
+- Documentation links point at docs.0xarchive.io.
+
 ## 1.9.0 - 2026-09-25
 
 ### Added
