@@ -27,7 +27,7 @@
 
 ### Development
 
-- vitest 4.1 (was 2.x). Tests run on Node 20 or newer.
+- vitest 3.2 (was 2.x), the patched line that installs cleanly on the npm bundled with Node 20 and 22.
 
 ## 1.9.0 - 2026-09-25
 
