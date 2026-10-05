@@ -1135,7 +1135,7 @@ hip3Oracle
 
 const stream = program
   .command('stream')
-  .description('Stream live market data, or replay stored data, over WebSocket (requires Node 22+)');
+  .description('Stream live market data, or replay stored data, over WebSocket');
 
 stream
   .command('liquidations <symbol>')

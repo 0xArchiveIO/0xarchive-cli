@@ -21,7 +21,7 @@ Or run it without installing:
 npx @0xarchive/cli auth test --exchange hyperliquid --symbol BTC
 ```
 
-The CLI needs Node.js 18 or later; the WebSocket commands (`oxa stream ...`) need Node.js 22 or later.
+The CLI needs Node.js 18 or later, including for the WebSocket commands (`oxa stream ...`).
 
 ## First Request
 
@@ -84,7 +84,7 @@ oxa cvd history --exchange hyperliquid --symbol BTC --start $DAY_AGO --end $NOW
 # Every symbol with its coverage dates, for one venue
 oxa symbols list --exchange hip3 --format pretty
 
-# Stream live Hyperliquid liquidations for a minute (Node.js 22 or later)
+# Stream live Hyperliquid liquidations for a minute
 oxa stream liquidations BTC --duration-ms 60000
 
 # Stream live Lighter order books for 10 seconds (at most one full top-20 book per second by default)
@@ -981,7 +981,7 @@ oxa stream trades HYPE-USDC --exchange spot --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`. Requires Node.js 22 or later, for the global `WebSocket`.
+Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`. Live streams and replays run on the SDK's WebSocket client, which connects with the `ws` package in Node.js. They work on Node.js 18 or later, and large messages, such as the L4 snapshot of a deep book, arrive intact.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)

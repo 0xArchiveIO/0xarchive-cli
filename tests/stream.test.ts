@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   REPLAY_ONLY_HINTS,
   REST_ONLY_HINTS,
-  buildSubscribeMessage,
   isLighterDropNotice,
   parseIntervalMs,
   resolveChannel,
@@ -12,12 +11,12 @@ import {
   streamOrderbookCommand,
   streamTradesCommand,
   wsSymbol,
-  wsUrlWithVersion,
 } from '../src/commands/stream.js';
 
-// `oxa stream subscribe` allows the channels the SDK's channel table marks
-// live. The SDK release the CLI requires exports that table; on an older
-// install (CI before that release reaches npm) those tests are skipped.
+// `oxa stream` runs on the SDK's WebSocket client and allows the channels the
+// SDK's channel table marks live. The SDK release the CLI requires exports
+// that table; on an older install (CI before that release reaches npm) the
+// socket tests are skipped and the commands ask for that release instead.
 const CHANNEL_TABLE = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, { live: boolean; replay: boolean }> })
   .WS_CHANNEL_CAPABILITIES;
 
@@ -27,23 +26,22 @@ class ProcessExit extends Error {
   }
 }
 
-type Listener = (event: any) => void;
+type Handler = ((event: any) => void) | null;
 
-// Minimal stand-in for the global WebSocket: records the URL and every frame
+// Stand-in for the socket the SDK client opens. A WebSocket assigned to
+// globalThis is the one the SDK uses, so this records the URL and every frame
 // sent, and lets a test fire server events by hand.
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
   readonly sent: string[] = [];
-  private readonly listeners = new Map<string, Listener[]>();
+  readyState = 0;
+  onopen: Handler = null;
+  onmessage: Handler = null;
+  onerror: Handler = null;
+  onclose: Handler = null;
 
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    const list = this.listeners.get(type) ?? [];
-    list.push(listener);
-    this.listeners.set(type, list);
   }
 
   closeCalls = 0;
@@ -58,13 +56,25 @@ class FakeWebSocket {
     this.closeCalls += 1;
   }
 
-  fire(type: string, event: any = {}): void {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  fire(type: 'open' | 'message' | 'error' | 'close', event: any = {}): void {
+    if (type === 'open') this.readyState = 1;
+    if (type === 'close') this.readyState = 3;
+    const handler = { open: this.onopen, message: this.onmessage, error: this.onerror, close: this.onclose }[type];
+    handler?.(event);
   }
 
   message(payload: unknown): void {
     this.fire('message', { data: JSON.stringify(payload) });
   }
+
+  /** Frames sent other than the client's keep-alive pings. */
+  frames(): any[] {
+    return this.sent.map((frame) => JSON.parse(frame)).filter((frame) => frame.op !== 'ping');
+  }
+}
+
+function exitCodes(): number[] {
+  return vi.mocked(process.exit).mock.calls.map(([code]) => Number(code ?? 0));
 }
 
 function stderrPayloads(): any[] {
@@ -159,11 +169,6 @@ describe('lighter_orderbook --interval-ms', () => {
 
   it('is omitted when not passed, so the server default of one book a second applies', () => {
     expect(parseIntervalMs(undefined, 'lighter_orderbook')).toBeUndefined();
-    expect(buildSubscribeMessage('lighter_orderbook', 'BTC')).toEqual({
-      op: 'subscribe',
-      channel: 'lighter_orderbook',
-      symbol: 'BTC',
-    });
   });
 
   it.each([
@@ -172,12 +177,6 @@ describe('lighter_orderbook --interval-ms', () => {
     ['5000', 5000],
   ])('accepts %s', (raw, expected) => {
     expect(parseIntervalMs(raw, 'lighter_orderbook')).toBe(expected);
-    expect(buildSubscribeMessage('lighter_orderbook', 'BTC', expected)).toEqual({
-      op: 'subscribe',
-      channel: 'lighter_orderbook',
-      symbol: 'BTC',
-      interval_ms: expected,
-    });
   });
 
   it.each(['50', '99', '5001', '250.5', 'abc', ''])('rejects %j', (raw) => {
@@ -206,12 +205,6 @@ describe('lighter_orderbook --interval-ms', () => {
     ['5000', 5000],
   ])('accepts %s on rh_lighter_orderbook', (raw, expected) => {
     expect(parseIntervalMs(raw, 'rh_lighter_orderbook')).toBe(expected);
-    expect(buildSubscribeMessage('rh_lighter_orderbook', 'AAPL-USDG', expected)).toEqual({
-      op: 'subscribe',
-      channel: 'rh_lighter_orderbook',
-      symbol: 'AAPL-USDG',
-      interval_ms: expected,
-    });
   });
 
   it('names the Robinhood Chain book channel in the range error', () => {
@@ -252,12 +245,14 @@ describe('Lighter drop notices', () => {
   });
 });
 
-describe('oxa stream over a WebSocket', () => {
+describe.runIf(CHANNEL_TABLE)('oxa stream over a WebSocket', () => {
   let savedWsUrl: string | undefined;
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
+    // The SDK client's keep-alive ping runs on an interval; keep it off the clock.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     vi.stubEnv('OXA_API_KEY', 'test-key');
     savedWsUrl = process.env.OXA_WS_URL;
     delete process.env.OXA_WS_URL;
@@ -270,6 +265,7 @@ describe('oxa stream over a WebSocket', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -284,7 +280,7 @@ describe('oxa stream over a WebSocket', () => {
     expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
 
     ws.fire('open');
-    expect(ws.sent.map((frame) => JSON.parse(frame))).toEqual([
+    expect(ws.frames()).toEqual([
       { op: 'subscribe', channel: 'lighter_orderbook', symbol: 'BTC', interval_ms: 250 },
     ]);
 
@@ -327,8 +323,8 @@ describe('oxa stream over a WebSocket', () => {
     ws.fire('open');
     const message =
       'Stopped the lighter_trades stream for BTC: your connection is too slow to keep up. Re-subscribe to resume.';
-    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
-    expect(process.exit).toHaveBeenCalledWith(4);
+    ws.message({ type: 'error', message });
+    expect(exitCodes()).toEqual([4]);
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
   });
 
@@ -337,7 +333,8 @@ describe('oxa stream over a WebSocket', () => {
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     const message = 'Unknown Lighter symbol NOPE.';
-    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
+    ws.message({ type: 'error', message });
+    expect(exitCodes()).toEqual([4]);
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
   });
 
@@ -346,8 +343,8 @@ describe('oxa stream over a WebSocket', () => {
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     const message = "The symbol 'NOPE' does not exist.";
-    expect(() => ws.message({ type: 'error', message, error_code: 'invalid_symbol' })).toThrow(ProcessExit);
-    expect(process.exit).toHaveBeenCalledWith(2);
+    ws.message({ type: 'error', message, error_code: 'invalid_symbol' });
+    expect(exitCodes()).toEqual([2]);
     expect(stderrPayloads().at(-1)).toEqual({
       error: `stream error: ${message}`,
       code: 2,
@@ -360,9 +357,8 @@ describe('oxa stream over a WebSocket', () => {
     await streamOrderbookCommand('BTC', { format: 'json' });
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
-    expect(() =>
-      ws.message({ type: 'error', message: 'The connection fell behind.', error_code: 'slow_consumer' }),
-    ).toThrow(ProcessExit);
+    ws.message({ type: 'error', message: 'The connection fell behind.', error_code: 'slow_consumer' });
+    expect(exitCodes()).toEqual([4]);
     expect(stderrPayloads().at(-1)).toMatchObject({ code: 4, type: 'network', error_code: 'slow_consumer' });
   });
 
@@ -399,6 +395,8 @@ describe('oxa stream over a WebSocket', () => {
   });
 
   it('treats its own --duration-ms close as a clean stop even when the server drops the session', async () => {
+    // Fake every timer here, the --duration-ms timeout included.
+    vi.useRealTimers();
     vi.useFakeTimers();
     try {
       await streamTradesCommand('BTC', { exchange: 'lighter', durationMs: '1000', format: 'json' });
@@ -439,7 +437,11 @@ describe('oxa stream over a WebSocket', () => {
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     expect(() => ws.fire('error', { message: 'socket hang up' })).toThrow(expect.objectContaining({ code: 4 }));
-    expect(stderrPayloads().at(-1)).toEqual({ error: 'websocket error: socket hang up', code: 4, type: 'network' });
+    expect(stderrPayloads().at(-1)).toEqual({
+      error: 'websocket error: WebSocket connection error',
+      code: 4,
+      type: 'network',
+    });
   });
 
   it('rejects --interval-ms on a non-Lighter orderbook before opening a socket', async () => {
@@ -482,7 +484,7 @@ describe('oxa stream over a WebSocket', () => {
     const ws = FakeWebSocket.instances[0];
     expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
     ws.fire('open');
-    expect(ws.sent.map((frame) => JSON.parse(frame))).toEqual([
+    expect(ws.frames()).toEqual([
       { op: 'subscribe', channel: 'rh_lighter_orderbook', symbol: 'AAPL-USDG', interval_ms: 500 },
     ]);
     const frame = { type: 'data', channel: 'rh_lighter_orderbook', coin: 'BTC', symbol: 'BTC', data: LIGHTER_BOOK };
@@ -515,6 +517,70 @@ describe('oxa stream over a WebSocket', () => {
       'Invalid exchange "rh-lighter" for `oxa stream liquidations`. Must be one of: hyperliquid, hip3.',
     );
   });
+
+  it('does not write the replies to keep-alive pings', async () => {
+    await streamTradesCommand('BTC', { format: 'pretty' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    vi.mocked(process.stdout.write).mockClear();
+    ws.message({ type: 'pong' });
+    expect(process.stdout.write).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing more once it has stopped the stream', async () => {
+    await streamTradesCommand('BTC', { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    const sigint = vi.mocked(process.on).mock.calls.find(([signal]) => signal === 'SIGINT')?.[1] as () => void;
+    sigint();
+    ws.message({ type: 'data', channel: 'trades', coin: 'BTC', symbol: 'BTC', data: [] });
+    expect(process.stdout.write).not.toHaveBeenCalled();
+  });
+
+  it('connects without a global WebSocket, as on Node.js 18 and 20', async () => {
+    vi.stubGlobal('WebSocket', undefined);
+    // The failure is reported from a socket event, so exit records the code
+    // instead of throwing out of the event handler.
+    vi.mocked(process.exit).mockImplementation((() => undefined) as never);
+    await streamTradesCommand('BTC', { format: 'json', url: 'ws://127.0.0.1:1/ws' });
+    await vi.waitFor(() => expect(process.exit).toHaveBeenCalled(), { timeout: 5_000 });
+    expect(exitCodes()[0]).toBe(4);
+    expect(stderrPayloads()[0]).toEqual({
+      error: 'websocket error: WebSocket connection error',
+      code: 4,
+      type: 'network',
+    });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+});
+
+describe.skipIf(CHANNEL_TABLE)('oxa stream on an SDK older than the floor', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubEnv('OXA_API_KEY', 'test-key');
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new ProcessExit(code ?? 0);
+    }) as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    () => streamTradesCommand('BTC', { format: 'json' }),
+    () => streamOrderbookCommand('BTC', { exchange: 'lighter', format: 'json' }),
+    () => streamLiquidationsCommand('BTC', { format: 'json' }),
+    () => streamGenericCommand('l4_diffs', 'BTC', { format: 'json' }),
+  ])('asks for the SDK release with the channel table (%#)', async (run) => {
+    await expect(Promise.resolve().then(run)).rejects.toMatchObject({ code: 5 });
+    expect(stderrPayloads().at(-1)?.error).toMatch(/requires @0xarchive\/sdk 1\.12\.0 or newer/);
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
 });
 
 describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table', () => {
@@ -523,6 +589,8 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
+    // The SDK client's keep-alive ping runs on an interval; keep it off the clock.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     vi.stubEnv('OXA_API_KEY', 'test-key');
     savedWsUrl = process.env.OXA_WS_URL;
     delete process.env.OXA_WS_URL;
@@ -535,6 +603,7 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -573,8 +642,8 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     const message = 'Dropped ~5 live messages: your connection fell behind the Hyperliquid stream.';
-    expect(() => ws.message({ type: 'error', message })).toThrow(ProcessExit);
-    expect(process.exit).toHaveBeenCalledWith(4);
+    ws.message({ type: 'error', message });
+    expect(exitCodes()).toEqual([4]);
     expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: 4, type: 'network' });
   });
 
@@ -688,18 +757,6 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_trades', symbol: '#0' });
-  });
-});
-
-describe('WebSocket API version', () => {
-  it('adds version=2026-10-01 once, with the right separator', () => {
-    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws')).toBe('wss://api.0xarchive.io/ws?version=2026-10-01');
-    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws?apiKey=k')).toBe(
-      'wss://api.0xarchive.io/ws?apiKey=k&version=2026-10-01',
-    );
-    expect(wsUrlWithVersion('wss://api.0xarchive.io/ws?version=2026-10-01')).toBe(
-      'wss://api.0xarchive.io/ws?version=2026-10-01',
-    );
   });
 });
 
