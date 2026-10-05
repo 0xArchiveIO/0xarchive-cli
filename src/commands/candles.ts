@@ -16,7 +16,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { pageEnvelope, hasMore, printNextPage } from '../lib/emit.js';
-import { parseTimestamp, parseLimit, validateCandleInterval } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit, validateCandleInterval } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 import { spotCandles } from './spot.js';
 
@@ -50,7 +50,7 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
     exitError(
       'Candles require --start and --end.\n' +
         'Example: oxa candles history --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z --interval 1h',
+        `${exampleRange(24)} --interval 1h`,
       EXIT.VALIDATION,
     );
   }
@@ -98,7 +98,7 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Candles (${exchange}) — ${candles.length} records`);
+      prettyHeader(`${options.symbol} Candles (${exchange}): ${candles.length} records`);
       prettyField('Interval', interval ?? '1h');
 
       if (candles.length === 0) {

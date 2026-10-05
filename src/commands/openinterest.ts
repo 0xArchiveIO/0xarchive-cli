@@ -16,7 +16,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { pageEnvelope, printNextPage } from '../lib/emit.js';
-import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface OICurrentOptions {
   exchange: string;
@@ -76,7 +76,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
     exitError(
       'Open interest history requires --start and --end.\n' +
         'Example: oxa oi history --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z',
+        exampleRange(24),
       EXIT.VALIDATION,
     );
   }
@@ -103,7 +103,7 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
     const envelope = pageEnvelope(result, records);
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} OI History (${exchange}) — ${records.length} records`);
+      prettyHeader(`${options.symbol} OI History (${exchange}): ${records.length} records`);
 
       if (records.length === 0) {
         prettyDim('No open interest data found.');
@@ -111,9 +111,9 @@ export async function oiHistoryCommand(options: OIHistoryOptions): Promise<void>
         const preview = records.slice(0, 20);
         const rows = preview.map((r: any) => [
           r.timestamp,
-          r.openInterest ?? r.oi ?? '—',
-          r.markPrice ?? '—',
-          r.oraclePrice ?? '—',
+          r.openInterest ?? r.oi ?? '-',
+          r.markPrice ?? '-',
+          r.oraclePrice ?? '-',
         ]);
         prettyTable(['Timestamp', 'OI', 'Mark Price', 'Oracle Price'], rows);
 

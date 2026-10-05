@@ -169,6 +169,26 @@ describe('API contract 2026-10-01 in the CLI', () => {
     vi.unstubAllEnvs();
   });
 
+  describe('pretty tables print numeric API values', () => {
+    const CANDLE = { timestamp: '2026-09-01T00:00:00.000Z', open: 86464.5, high: 86500, low: 86400.25, close: 86480, volume: 12.5 };
+
+    it.each([
+      ['hyperliquid', () => sdk.state.clients.hyperliquid.candles.history],
+      ['hip3', () => sdk.state.clients.hyperliquid.hip3.candles.history],
+      ['lighter', () => sdk.state.clients.lighter.candles.history],
+      ['rh-lighter', () => sdk.state.clients.rhLighter.candles.history],
+    ])('`oxa candles history --exchange %s --format pretty`', async (exchange, history) => {
+      history().mockResolvedValue({ data: [CANDLE], nextCursor: undefined, hasMore: false });
+      expect(
+        await runCli(
+          'candles', 'history', '--exchange', exchange, '--symbol', 'BTC',
+          '--start', START, '--end', END, '--format', 'pretty',
+        ),
+      ).toBe(0);
+      expect(stdoutText()).toMatch(/2026-09-01T00:00:00\.000Z\s+86464\.5\s+86500\s+86400\.25\s+86480\s+12\.5/);
+    });
+  });
+
   describe('errors print the API error_code and request id', () => {
     it.each(['json', 'pretty'])('in %s output', async (format) => {
       sdk.state.clients.hyperliquid.candles.history.mockRejectedValue(

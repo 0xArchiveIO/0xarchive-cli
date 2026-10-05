@@ -132,7 +132,7 @@ export async function l3HistoryCommand(options: L3HistoryOptions): Promise<void>
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L3 Orderbook History (lighter) — ${snapshots.length} records`);
+      prettyHeader(`${options.symbol} L3 Orderbook History (lighter): ${snapshots.length} records`);
       if (snapshots.length === 0) {
         prettyDim('No L3 orderbook snapshots found.');
       } else {

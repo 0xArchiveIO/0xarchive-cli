@@ -19,7 +19,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { hasMore, printNextPage } from '../lib/emit.js';
-import { parseTimestamp, parseLimit } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit } from '../lib/time.js';
 import { parseChoice } from '../lib/params.js';
 import { writeOutputFile } from '../lib/file.js';
 
@@ -81,7 +81,7 @@ export async function tradesFetchCommand(options: TradesFetchOptions): Promise<v
       exitError(
         'Hyperliquid trades require a time range. Provide --start and --end.\n' +
           'Example: oxa trades history --exchange hyperliquid --symbol BTC ' +
-          '--start 2026-01-01T00:00:00Z --end 2026-01-01T01:00:00Z',
+          exampleRange(1),
         EXIT.VALIDATION,
       );
     }
@@ -91,7 +91,7 @@ export async function tradesFetchCommand(options: TradesFetchOptions): Promise<v
     return fetchRecent(exchange, options.symbol, limit, side, apiKey, format, options.out);
   }
 
-  // Range provided — parse and validate
+  // Range provided: parse and validate
   const start = parseTimestamp(options.start!, 'start');
   const end = parseTimestamp(options.end!, 'end');
 
@@ -225,7 +225,7 @@ function prettyPrintTrades(
   page?: { nextCursor: string | null; has_more: boolean },
   meta?: Record<string, unknown>,
 ): void {
-  prettyHeader(`${symbol} Trades (${exchange}) — ${trades.length} records`);
+  prettyHeader(`${symbol} Trades (${exchange}): ${trades.length} records`);
   if (meta) {
     prettyField('Finalized through', metaString(meta, 'finalizedThrough', 'finalized_through'));
     prettyField('Clamped to', metaString(meta, 'clampedTo', 'clamped_to'));

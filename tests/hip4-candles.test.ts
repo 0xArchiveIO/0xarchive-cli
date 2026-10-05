@@ -126,6 +126,37 @@ describe('HIP-4 candle coverage', () => {
     );
   });
 
+  it('prints numeric HIP-4 candles in pretty format', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        fakeApiResponse({
+          success: true,
+          data: [{ timestamp: '2026-05-02T00:00:00Z', open: 0.4, high: 0.5, low: 0.3, close: 0.45, volume: 120 }],
+          meta: { count: 1, request_id: 'req-3' },
+        }),
+      ),
+    );
+    interceptExit();
+
+    await candlesCommand({
+      exchange: 'hip4',
+      symbol: '0',
+      start: '2026-05-02T00:00:00Z',
+      end: '2026-05-02T01:00:00Z',
+      interval: '1h',
+      format: 'pretty',
+      apiKey: 'test-key',
+    });
+
+    const output = vi
+      .mocked(process.stdout.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join('');
+    expect(output).toMatch(/2026-05-02T00:00:00Z\s+0\.4\s+0\.5\s+0\.3\s+0\.45\s+120/);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
   it('keeps HIP-4 funding rejected before any network request', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

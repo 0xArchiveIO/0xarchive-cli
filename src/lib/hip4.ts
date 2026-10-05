@@ -8,12 +8,12 @@ const HIP4_BASE_PATH = '/v1/hyperliquid/hip4';
 // caller passed `#N` or `%23N` we strip the prefix and use the bare digits.
 export function encodeHip4Coin(symbol: string): string {
   const trimmed = String(symbol).trim();
-  // Bare numeric form is canonical — pass through as-is.
+  // Bare numeric form is canonical: pass through as-is.
   if (/^\d+$/.test(trimmed)) return trimmed;
   // Strip leading `#` (raw or percent-encoded as %23) if present.
   const stripped = trimmed.replace(/^(#|%23)/i, '');
   if (/^\d+$/.test(stripped)) return stripped;
-  // Unknown shape — fall back to URL-encoding the original string.
+  // Unknown shape: fall back to URL-encoding the original string.
   return encodeURIComponent(trimmed);
 }
 

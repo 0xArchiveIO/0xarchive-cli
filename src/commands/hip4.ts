@@ -1,4 +1,4 @@
-// Thin HIP-4 command surface — maps `oxa hip4 <verb> <coin>` to the underlying
+// Thin HIP-4 command surface: maps `oxa hip4 <verb> <coin>` to the underlying
 // shared command implementations with `--exchange hip4` baked in. Coins are
 // passed positionally as bare numerics (e.g. `oxa hip4 orderbook 0`, where `0`
 // means outcome 0 / side 0). The legacy `#0` / `%230` forms still work because

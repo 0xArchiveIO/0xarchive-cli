@@ -38,47 +38,47 @@ export async function instrumentsCommand(options: InstrumentsOptions): Promise<v
     const instruments = await exchangeClient.instruments.list();
 
     if (format === 'pretty') {
-      prettyHeader(`Instruments (${exchange}) — ${instruments.length} total`);
+      prettyHeader(`Instruments (${exchange}): ${instruments.length} total`);
 
       if (instruments.length === 0) {
         prettyDim('No instruments found.');
       } else if (isLighterExchange(exchange)) {
         const rows = instruments.map((i: any) => [
-          i.symbol ?? i.name ?? '—',
-          i.marketType ?? '—',
+          i.symbol ?? i.name ?? '-',
+          i.marketType ?? '-',
           i.status ?? (i.isActive ? 'active' : 'inactive'),
-          i.takerFee != null ? String(i.takerFee) : '—',
-          i.makerFee != null ? String(i.makerFee) : '—',
+          i.takerFee != null ? String(i.takerFee) : '-',
+          i.makerFee != null ? String(i.makerFee) : '-',
         ]);
         prettyTable(['Symbol', 'Type', 'Status', 'Taker Fee', 'Maker Fee'], rows);
       } else if (exchange === 'hip3') {
         const rows = instruments.map((i: any) => [
-          i.coin ?? '—',
-          i.namespace ?? '—',
-          i.ticker ?? '—',
-          i.markPrice ?? '—',
-          i.openInterest ?? '—',
+          i.coin ?? '-',
+          i.namespace ?? '-',
+          i.ticker ?? '-',
+          i.markPrice ?? '-',
+          i.openInterest ?? '-',
         ]);
         prettyTable(['Coin', 'Namespace', 'Ticker', 'Mark Price', 'OI'], rows);
       } else if (exchange === 'hip4') {
         // mark_price for HIP-4 is implied probability (0..1), not USD.
         const rows = instruments.map((i: any) => [
-          i.coin ?? '—',
-          String(i.outcomeId ?? '—'),
-          String(i.side ?? '—'),
-          i.sideName ?? '—',
-          i.name ?? '—',
+          i.coin ?? '-',
+          String(i.outcomeId ?? '-'),
+          String(i.side ?? '-'),
+          i.sideName ?? '-',
+          i.name ?? '-',
           i.isSettled ? 'settled' : 'live',
         ]);
         prettyTable(['Coin', 'Outcome', 'Side', 'Side Name', 'Name', 'Status'], rows);
       } else {
         // Hyperliquid
         const rows = instruments.map((i: any) => [
-          i.name ?? '—',
+          i.name ?? '-',
           i.instrumentType ?? 'perp',
           i.isActive ? 'active' : 'inactive',
-          i.maxLeverage != null ? String(i.maxLeverage) : '—',
-          i.szDecimals != null ? String(i.szDecimals) : '—',
+          i.maxLeverage != null ? String(i.maxLeverage) : '-',
+          i.szDecimals != null ? String(i.szDecimals) : '-',
         ]);
         prettyTable(['Symbol', 'Type', 'Status', 'Max Leverage', 'Size Decimals'], rows);
       }

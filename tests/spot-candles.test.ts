@@ -36,6 +36,35 @@ describe('Hyperliquid Spot candle coverage', () => {
     vi.unstubAllEnvs();
   });
 
+  it('prints numeric Spot candles in pretty format', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        fakeApiResponse({
+          success: true,
+          data: [{ timestamp: '2026-09-01T00:00:00Z', open: 90.5, high: 91.25, low: 90, close: 91, volume: 1234.5 }],
+          meta: { count: 1, request_id: 'req-spot-pretty' },
+        }),
+      ),
+    );
+    interceptExit();
+
+    await spotCandles('HYPE-USDC', {
+      start: '2026-09-01T00:00:00Z',
+      end: '2026-09-01T01:00:00Z',
+      interval: '1h',
+      format: 'pretty',
+      apiKey: 'test-key',
+    });
+
+    const output = vi
+      .mocked(process.stdout.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join('');
+    expect(output).toMatch(/2026-09-01T00:00:00Z\s+90\.5\s+91\.25\s+90\s+91\s+1234\.5/);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
   it('routes Spot candles and preserves opaque cursor metadata', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       fakeApiResponse({

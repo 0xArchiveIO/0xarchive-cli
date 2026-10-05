@@ -131,7 +131,7 @@ export async function l4DiffsCommand(options: L4DiffsOptions): Promise<void> {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L4 Diffs (${exchange}) — ${diffs.length} records`);
+      prettyHeader(`${options.symbol} L4 Diffs (${exchange}): ${diffs.length} records`);
       if (diffs.length === 0) {
         prettyDim('No L4 diffs found.');
       } else {
@@ -212,7 +212,7 @@ export async function l4HistoryCommand(options: L4HistoryOptions): Promise<void>
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L4 Orderbook History (${exchange}) — ${snapshots.length} records`);
+      prettyHeader(`${options.symbol} L4 Orderbook History (${exchange}): ${snapshots.length} records`);
       if (snapshots.length === 0) {
         prettyDim('No L4 orderbook checkpoints found.');
       } else {

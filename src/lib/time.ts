@@ -24,6 +24,18 @@ export function parseTimestamp(value: string, label: string): number {
 }
 
 /**
+ * `--start ... --end ...` for a usage example in a message: a window that
+ * opens at midnight UTC yesterday, so the example falls inside every plan's
+ * history window whenever it is printed.
+ */
+export function exampleRange(hours: number): string {
+  const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const startMs = Date.parse(`${day}T00:00:00Z`);
+  const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z');
+  return `--start ${iso(startMs)} --end ${iso(startMs + hours * 3_600_000)}`;
+}
+
+/**
  * Parse and validate a --limit flag.
  */
 export function parseLimit(value: string | undefined): number | undefined {

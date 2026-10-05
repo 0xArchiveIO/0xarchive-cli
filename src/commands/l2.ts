@@ -141,7 +141,7 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L2 Orderbook History (${exchange}) — ${snapshots.length} records`);
+      prettyHeader(`${options.symbol} L2 Orderbook History (${exchange}): ${snapshots.length} records`);
       if (snapshots.length === 0) {
         prettyDim('No L2 orderbook checkpoints found.');
       } else {
@@ -224,7 +224,7 @@ export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L2 Diffs (${exchange}) — ${diffs.length} records`);
+      prettyHeader(`${options.symbol} L2 Diffs (${exchange}): ${diffs.length} records`);
       if (diffs.length === 0) {
         prettyDim('No L2 diffs found.');
       } else {

@@ -23,7 +23,7 @@ interface FreshnessOptions {
 }
 
 function formatLag(lagMs: number | undefined | null): string {
-  if (lagMs === undefined || lagMs === null) return '—';
+  if (lagMs === undefined || lagMs === null) return '-';
   if (lagMs < 1000) return `${lagMs}ms`;
   if (lagMs < 60_000) return `${(lagMs / 1000).toFixed(1)}s`;
   if (lagMs < 3_600_000) return `${(lagMs / 60_000).toFixed(1)}m`;
@@ -63,7 +63,7 @@ export async function freshnessCommand(options: FreshnessOptions): Promise<void>
 
       const rows = dataTypes.map((dt) => [
         dt.name,
-        dt.info?.lastUpdated ?? '—',
+        dt.info?.lastUpdated ?? '-',
         formatLag(dt.info?.lagMs),
       ]);
 

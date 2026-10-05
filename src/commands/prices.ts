@@ -15,7 +15,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { pageEnvelope, printNextPage } from '../lib/emit.js';
-import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface PricesOptions {
   exchange: string;
@@ -40,7 +40,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
     exitError(
       'Price history requires --start and --end.\n' +
         'Example: oxa prices --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z --interval 1h',
+        `${exampleRange(24)} --interval 1h`,
       EXIT.VALIDATION,
     );
   }
@@ -67,7 +67,7 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
     const envelope = pageEnvelope(result, prices);
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Price History (${exchange}) — ${prices.length} records`);
+      prettyHeader(`${options.symbol} Price History (${exchange}): ${prices.length} records`);
 
       if (prices.length === 0) {
         prettyDim('No price data found.');
@@ -75,9 +75,9 @@ export async function pricesCommand(options: PricesOptions): Promise<void> {
         const preview = prices.slice(0, 20);
         const rows = preview.map((p: any) => [
           p.timestamp,
-          p.markPrice ?? '—',
-          p.oraclePrice ?? '—',
-          p.midPrice ?? '—',
+          p.markPrice ?? '-',
+          p.oraclePrice ?? '-',
+          p.midPrice ?? '-',
         ]);
         prettyTable(['Timestamp', 'Mark', 'Oracle', 'Mid'], rows);
 

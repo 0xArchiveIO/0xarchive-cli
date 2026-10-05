@@ -104,7 +104,7 @@ export async function ordersHistoryCommand(options: OrdersHistoryOptions): Promi
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Order History (${exchange}) — ${orders.length} records`);
+      prettyHeader(`${options.symbol} Order History (${exchange}): ${orders.length} records`);
       if (orders.length === 0) {
         prettyDim('No orders found.');
       } else {
@@ -193,7 +193,7 @@ export async function ordersFlowCommand(options: OrdersFlowOptions): Promise<voi
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Order Flow (${exchange}) — ${data.length} records`);
+      prettyHeader(`${options.symbol} Order Flow (${exchange}): ${data.length} records`);
       if (data.length === 0) {
         prettyDim('No order flow data found.');
       } else {
@@ -274,7 +274,7 @@ export async function ordersTpslCommand(options: OrdersTpslOptions): Promise<voi
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} TP/SL Orders (${exchange}) — ${orders.length} records`);
+      prettyHeader(`${options.symbol} TP/SL Orders (${exchange}): ${orders.length} records`);
       if (orders.length === 0) {
         prettyDim('No TP/SL orders found.');
       } else {

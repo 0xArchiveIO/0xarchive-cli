@@ -137,7 +137,7 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
     }
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Orderbook History (${exchange}) — ${snapshots.length} snapshots`);
+      prettyHeader(`${options.symbol} Orderbook History (${exchange}): ${snapshots.length} snapshots`);
 
       if (snapshots.length === 0) {
         prettyDim('No snapshots found.');
@@ -145,8 +145,8 @@ export async function orderbookHistoryCommand(options: OrderbookHistoryOptions):
         const preview = snapshots.slice(0, 20);
         const rows = preview.map((ob: any) => [
           ob.timestamp,
-          ob.midPrice ?? '—',
-          ob.spreadBps ?? '—',
+          ob.midPrice ?? '-',
+          ob.spreadBps ?? '-',
           String(ob.bids?.length ?? 0),
           String(ob.asks?.length ?? 0),
         ]);

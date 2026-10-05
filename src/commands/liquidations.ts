@@ -20,7 +20,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { writeOutputFile } from '../lib/file.js';
-import { parseTimestamp, parseLimit } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit } from '../lib/time.js';
 import { getLiquidationLevelsResource, hyperliquidVenue } from '../lib/sdk.js';
 import { levelHistoryParams, levelParams, type LevelHistoryOptions, type LevelOptions } from '../lib/levels.js';
 import { cell, emitDocument, emitPage, field, pageEnvelope, printMore, printNextPage, toPage } from '../lib/emit.js';
@@ -105,7 +105,7 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
     exitError(
       'Liquidations require --start and --end.\n' +
         'Example: oxa liquidations history --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-01T01:00:00Z',
+        exampleRange(1),
       EXIT.VALIDATION,
     );
   }
@@ -130,7 +130,7 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
     const envelope = pageEnvelope(result, liqs);
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Liquidations (${exchange}) — ${liqs.length} records`);
+      prettyHeader(`${options.symbol} Liquidations (${exchange}): ${liqs.length} records`);
 
       if (liqs.length === 0) {
         prettyDim('No liquidations found.');
@@ -205,7 +205,7 @@ export async function liquidationsVolumeCommand(options: LiquidationsVolumeOptio
     }
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Liquidation Volume (${exchange}) — ${buckets.length} buckets`);
+      prettyHeader(`${options.symbol} Liquidation Volume (${exchange}): ${buckets.length} buckets`);
 
       if (buckets.length === 0) {
         prettyDim('No volume data found.');
@@ -285,7 +285,7 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
     }
 
     if (format === 'pretty') {
-      prettyHeader(`Liquidations for ${options.user.slice(0, 10)}... (${exchange}) — ${liqs.length} records`);
+      prettyHeader(`Liquidations for ${options.user.slice(0, 10)}... (${exchange}): ${liqs.length} records`);
 
       if (liqs.length === 0) {
         prettyDim('No liquidations found for this user.');
@@ -293,7 +293,7 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
         const preview = liqs.slice(0, 20);
         const rows = preview.map((l: any) => [
           l.timestamp,
-          l.coin ?? '—',
+          l.coin ?? '-',
           l.side === 'B' ? 'LONG' : 'SHORT',
           l.price,
           l.size,
