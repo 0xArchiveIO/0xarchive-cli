@@ -217,11 +217,10 @@ describe('HIP-4 candle coverage', () => {
     expect(source).not.toContain('Use --exchange hl or hip3.');
   });
 
-  it('keeps the authenticated Spot inventory coherent across user-facing copy', () => {
+  it('leaves the Spot pair count to `oxa spot pairs` instead of pinning it in user-facing copy', () => {
     const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
     const cliSource = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
-    expect(readme).toContain('326 pairs');
-    expect(cliSource).toContain('326 pairs');
-    expect(`${readme}\n${cliSource}`).not.toContain('294 pairs');
+    expect(`${readme}\n${cliSource}`).not.toMatch(/\b\d+ (spot )?pairs\b/);
+    expect(readme).toContain('oxa spot pairs');
   });
 });

@@ -178,7 +178,7 @@ describe('Hyperliquid Spot candle coverage', () => {
     const spotSource = readFileSync(new URL('../src/commands/spot.ts', import.meta.url), 'utf8');
 
     expect(cliSource).toContain(".command('candles <symbol>')");
-    expect(readme).toContain('Spot candles from 2025-03-22T10:50:22Z');
+    expect(readme).toContain('Spot candles from 2025-03-22 10:50 UTC');
     expect(readme).toContain('oxa spot candles HYPE-USDC');
     expect(`${readme}\n${cliSource}\n${spotSource}`).not.toContain(
       'Spot has no funding, open interest, liquidations, or candles',

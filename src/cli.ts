@@ -1222,7 +1222,8 @@ stream
 // ── oxa spot ────────────────────────────────────────────────────────────
 // Hyperliquid Spot. Symbols are dashed canonical (HYPE-USDC, PURR-USDC).
 // No funding, OI, or liquidations. Spot candles are served from
-// 2025-03-22T10:50:22Z; orderbook, L4, and TWAP are live from 2026-05-05.
+// 2025-03-22 10:50 UTC; order book, L4, and TWAP from 2026-05-05. TWAP is
+// REST only.
 
 const spot = program
   .command('spot')
@@ -1251,7 +1252,7 @@ const spotPairs = spot
 
 spotPairs
   .command('list', { isDefault: true })
-  .description('List every active spot pair (326 pairs)')
+  .description('List every active spot pair')
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(spotPairsList);
@@ -1341,7 +1342,7 @@ spot
   .command('twap')
   .description('Spot TWAP statuses ("oxa spot twap <symbol>" runs "oxa spot twap history <symbol>")')
   .command('history <symbol>', { isDefault: true })
-  .description('Get spot TWAP statuses for a pair (live from 2026-05-05)')
+  .description('Get spot TWAP statuses for a pair (from 2026-05-05; REST only, not streamed)')
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')
   .option('--limit <n>', 'Maximum records to return')
