@@ -1,4 +1,5 @@
-// `oxa cvd <symbol>`: cumulative volume delta on Hyperliquid core and HIP-3.
+// `oxa cvd history --symbol <symbol>` (also `oxa cvd <symbol>`): cumulative
+// volume delta on Hyperliquid core and HIP-3.
 // Taker buy and sell notional per bucket, their difference, and a running
 // total that restarts on every page.
 
@@ -13,6 +14,7 @@ import { compact } from '../lib/positions.js';
 
 interface CvdOptions {
   exchange: string;
+  symbol?: string;
   start?: string;
   end?: string;
   interval?: string;
@@ -23,7 +25,14 @@ interface CvdOptions {
   format: string;
 }
 
-export async function cvdCommand(symbol: string, options: CvdOptions): Promise<void> {
+export async function cvdCommand(positional: string | undefined, options: CvdOptions): Promise<void> {
+  if (positional !== undefined && options.symbol !== undefined && positional !== options.symbol) {
+    exitError(`Two symbols given ("${positional}" and --symbol "${options.symbol}"). Pass one.`, EXIT.VALIDATION);
+  }
+  const symbol = positional ?? options.symbol;
+  if (symbol === undefined) {
+    exitError('A symbol is required: oxa cvd history --exchange <exchange> --symbol <symbol>.', EXIT.VALIDATION);
+  }
   const format = validateFormat(options.format);
   const venue = hyperliquidVenue(options.exchange, 'CVD');
   const apiKey = resolveApiKey(options.apiKey);
@@ -68,7 +77,7 @@ export async function cvdCommand(symbol: string, options: CvdOptions): Promise<v
           cell(field(b, 'cumulativeDelta', 'cumulative_delta')),
         ]),
       );
-      printMore(shown.length, buckets.length, page.nextCursor);
+      printMore(shown.length, buckets.length, page);
       prettyDim('Cumulative delta restarts on every page; rebuild it from delta when joining pages.');
     });
     process.exit(EXIT.SUCCESS);

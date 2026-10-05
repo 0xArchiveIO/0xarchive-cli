@@ -15,8 +15,10 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, validateCandleInterval } from '../lib/time.js';
+import { pageEnvelope, hasMore, printNextPage } from '../lib/emit.js';
+import { exampleRange, parseTimestamp, parseLimit, validateCandleInterval } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
+import { spotCandles } from './spot.js';
 
 interface CandlesOptions {
   exchange: string;
@@ -32,6 +34,11 @@ interface CandlesOptions {
 }
 
 export async function candlesCommand(options: CandlesOptions): Promise<void> {
+  if (options.exchange === 'spot') {
+    // Spot candles have their own route and a 1000-row page limit.
+    const { exchange: _exchange, symbol, ...rest } = options;
+    return spotCandles(symbol, rest);
+  }
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
   const apiKey = resolveApiKey(options.apiKey);
@@ -42,8 +49,8 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
   if (!options.start || !options.end) {
     exitError(
       'Candles require --start and --end.\n' +
-        'Example: oxa candles --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z --interval 1h',
+        'Example: oxa candles history --exchange hyperliquid --symbol BTC ' +
+        `${exampleRange(24)} --interval 1h`,
       EXIT.VALIDATION,
     );
   }
@@ -67,7 +74,7 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
       interval,
     });
     const candles = result.data;
-    const envelope = { data: candles, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, candles);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -77,7 +84,7 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
         exchange,
         symbol: options.symbol,
         interval: interval ?? '1h',
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
@@ -85,13 +92,13 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
         prettyField('Records', candles.length);
         prettyField('Interval', interval ?? '1h');
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Candles (${exchange}) — ${candles.length} records`);
+      prettyHeader(`${options.symbol} Candles (${exchange}): ${candles.length} records`);
       prettyField('Interval', interval ?? '1h');
 
       if (candles.length === 0) {
@@ -111,9 +118,7 @@ export async function candlesCommand(options: CandlesOptions): Promise<void> {
         if (candles.length > 20) {
           prettyDim(`... and ${candles.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

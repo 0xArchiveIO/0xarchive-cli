@@ -1,25 +1,6 @@
-import { OxArchiveError } from '@0xarchive/sdk';
+import { ApiHttpClient, cursorPage, type CursorPage } from './http.js';
 
-const DEFAULT_BASE_URL = 'https://api.0xarchive.io';
-const DEFAULT_TIMEOUT = 30_000;
 const HIP4_BASE_PATH = '/v1/hyperliquid/hip4';
-
-function snakeToCamel(str: string): string {
-  return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
-}
-
-function transformKeys(obj: unknown): unknown {
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) return obj.map(transformKeys);
-  if (typeof obj === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      result[snakeToCamel(key)] = transformKeys(value);
-    }
-    return result;
-  }
-  return obj;
-}
 
 // HIP-4 path encoding: the canonical form is the bare numeric `0`, `1`, `42`.
 // The legacy `#0` / `%230` forms are still accepted by the API. We normalize to
@@ -27,107 +8,38 @@ function transformKeys(obj: unknown): unknown {
 // caller passed `#N` or `%23N` we strip the prefix and use the bare digits.
 export function encodeHip4Coin(symbol: string): string {
   const trimmed = String(symbol).trim();
-  // Bare numeric form is canonical — pass through as-is.
+  // Bare numeric form is canonical: pass through as-is.
   if (/^\d+$/.test(trimmed)) return trimmed;
   // Strip leading `#` (raw or percent-encoded as %23) if present.
   const stripped = trimmed.replace(/^(#|%23)/i, '');
   if (/^\d+$/.test(stripped)) return stripped;
-  // Unknown shape — fall back to URL-encoding the original string.
+  // Unknown shape: fall back to URL-encoding the original string.
   return encodeURIComponent(trimmed);
 }
 
-interface ApiEnvelope<T> {
-  success?: boolean;
-  data?: T;
-  meta?: { nextCursor?: string; count?: number; requestId?: string };
-  error?: string;
-}
+/** One page of a HIP-4 cursor-paged route. */
+export type CursorResponse<T> = CursorPage<T>;
 
-export interface CursorResponse<T> {
-  data: T;
-  nextCursor?: string;
-}
+/** A trade side filter, applied by the API. */
+export type TradeSideParam = 'buy' | 'sell';
 
 export class Hip4Client {
-  private baseUrl: string;
-  private apiKey: string;
-  private timeout: number;
+  private readonly http: ApiHttpClient;
 
   constructor(apiKey: string, opts?: { baseUrl?: string; timeout?: number }) {
-    this.apiKey = apiKey;
-    this.baseUrl = (opts?.baseUrl ?? process.env.OXA_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, '');
-    this.timeout = opts?.timeout ?? DEFAULT_TIMEOUT;
-  }
-
-  private async request<T = unknown>(
-    path: string,
-    params?: Record<string, unknown>,
-  ): Promise<T> {
-    const url = new URL(`${this.baseUrl}${path}`);
-    if (params) {
-      for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined && value !== null) {
-          url.searchParams.set(key, String(value));
-        }
-      }
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'X-API-Key': this.apiKey,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      const rawData = await response.json();
-      const data = transformKeys(rawData) as ApiEnvelope<T> & T;
-
-      if (!response.ok) {
-        throw new OxArchiveError(
-          (data as ApiEnvelope<T>).error || `Request failed with status ${response.status}`,
-          response.status,
-          (data as ApiEnvelope<T>).meta?.requestId,
-        );
-      }
-      return data as T;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof OxArchiveError) throw error;
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new OxArchiveError(`Request timeout after ${this.timeout}ms`, 408);
-      }
-      throw new OxArchiveError(
-        error instanceof Error ? error.message : 'Unknown error',
-        500,
-      );
-    }
+    this.http = new ApiHttpClient(apiKey, opts);
   }
 
   private async cursorRequest<T>(
     path: string,
     params?: Record<string, unknown>,
   ): Promise<CursorResponse<T>> {
-    const envelope = await this.request<ApiEnvelope<T>>(path, params);
-    if (envelope && typeof envelope === 'object' && 'data' in envelope) {
-      return {
-        data: (envelope.data as T) ?? ([] as unknown as T),
-        nextCursor: envelope.meta?.nextCursor,
-      };
-    }
-    // Fallback: API returned a bare array
-    return { data: envelope as unknown as T };
+    return cursorPage<T>(await this.http.get(path, params), [] as unknown as T);
   }
 
   // Some endpoints return the bare object/array under `data`; others return it raw.
   private async unwrap<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-    const envelope = await this.request<ApiEnvelope<T>>(path, params);
+    const envelope = (await this.http.get(path, params)) as { data?: T } | null;
     if (envelope && typeof envelope === 'object' && 'data' in envelope && envelope.data !== undefined) {
       return envelope.data as T;
     }
@@ -186,16 +98,21 @@ export class Hip4Client {
   trades = {
     list: async (
       symbol: string,
-      params: { start: number; end: number; limit?: number; cursor?: string },
+      params: { start: number; end: number; limit?: number; cursor?: string; side?: TradeSideParam },
     ): Promise<CursorResponse<any[]>> => {
       return this.cursorRequest<any[]>(
         `${HIP4_BASE_PATH}/trades/${encodeHip4Coin(symbol)}`,
         params as Record<string, unknown>,
       );
     },
-    recent: async (symbol: string, limit?: number): Promise<any[]> => {
+    recent: async (
+      symbol: string,
+      limitOrParams?: number | { limit?: number; side?: TradeSideParam },
+    ): Promise<any[]> => {
+      const params = typeof limitOrParams === 'number' ? { limit: limitOrParams } : (limitOrParams ?? {});
       const q: Record<string, unknown> = {};
-      if (limit) q.limit = limit;
+      if (params.limit) q.limit = params.limit;
+      if (params.side) q.side = params.side;
       return this.unwrap<any[]>(`${HIP4_BASE_PATH}/trades/${encodeHip4Coin(symbol)}/recent`, q);
     },
   };

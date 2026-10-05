@@ -11,6 +11,15 @@ export type Exchange = 'hyperliquid' | 'lighter' | 'rh-lighter' | 'hip3' | 'hip4
 
 export const VALID_EXCHANGES: readonly Exchange[] = ['hyperliquid', 'lighter', 'rh-lighter', 'hip3', 'hip4'];
 
+/**
+ * `--exchange` values on the shared-datatype commands that also serve
+ * Hyperliquid Spot (`--exchange spot`): order book, trades, candles, L4, order
+ * history, freshness, and instruments.
+ */
+export type Venue = Exchange | 'spot';
+
+export const VALID_VENUES: readonly Venue[] = ['hyperliquid', 'hip3', 'hip4', 'spot', 'lighter', 'rh-lighter'];
+
 /** Both Lighter deployments. */
 export type LighterExchange = 'lighter' | 'rh-lighter';
 
@@ -38,6 +47,8 @@ export function exchangeLabel(exchange: string): string {
       return 'Lighter';
     case 'rh-lighter':
       return 'Lighter on Robinhood Chain';
+    case 'spot':
+      return 'Hyperliquid Spot';
     default:
       return exchange;
   }
@@ -68,6 +79,13 @@ export function resolveApiKey(cliKey?: string): string {
 }
 
 export function validateExchange(exchange: string): Exchange {
+  if (exchange === 'spot') {
+    exitError(
+      `Hyperliquid Spot (--exchange spot) is not served by this command. Must be one of: ${VALID_EXCHANGES.join(', ')}. ` +
+        'Run "oxa spot --help" for the Spot commands.',
+      EXIT.VALIDATION,
+    );
+  }
   if (!VALID_EXCHANGES.includes(exchange as Exchange)) {
     exitError(
       `Invalid exchange "${exchange}". Must be one of: ${VALID_EXCHANGES.join(', ')}`,
@@ -77,18 +95,31 @@ export function validateExchange(exchange: string): Exchange {
   return exchange as Exchange;
 }
 
+/** Validate `--exchange` on a command that also serves Hyperliquid Spot. */
+export function validateVenue(exchange: string): Venue {
+  if (!VALID_VENUES.includes(exchange as Venue)) {
+    exitError(
+      `Invalid exchange "${exchange}". Must be one of: ${VALID_VENUES.join(', ')}`,
+      EXIT.VALIDATION,
+    );
+  }
+  return exchange as Venue;
+}
+
 /**
  * Reject an `--exchange` value that has no endpoint for `feature`, before any
- * network call.
+ * network call. `alsoServedBy` names further `--exchange` values the command
+ * accepts (such as `spot`), for the message.
  */
 export function requireExchange<T extends Exchange>(
   exchange: Exchange,
   allowed: readonly T[],
   feature: string,
+  alsoServedBy: readonly string[] = [],
 ): asserts exchange is T {
   if (!allowed.includes(exchange as T)) {
     exitError(
-      `${exchangeLabel(exchange)} has no ${feature} endpoint. Use --exchange ${listOr(allowed)}.`,
+      `${exchangeLabel(exchange)} has no ${feature} endpoint. Use --exchange ${listOr([...allowed, ...alsoServedBy])}.`,
       EXIT.VALIDATION,
     );
   }

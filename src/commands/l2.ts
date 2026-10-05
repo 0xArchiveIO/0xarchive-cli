@@ -15,6 +15,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, hasMore, printNextPage } from '../lib/emit.js';
 import { parseTimestamp, parseLimit, parsePositiveInt } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 
@@ -77,6 +78,7 @@ interface L2HistoryOptions {
   symbol: string;
   start: string;
   end: string;
+  depth?: string;
   limit?: string;
   cursor?: string;
   out?: string;
@@ -84,7 +86,8 @@ interface L2HistoryOptions {
   format: string;
 }
 
-// Every full-depth checkpoint carries the whole book; the route takes no depth.
+// Every full-depth checkpoint carries the whole book unless --depth caps the
+// price levels per side.
 export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void> {
   const format = validateFormat(options.format);
   const exchange = validateExchange(options.exchange);
@@ -99,6 +102,7 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
   const start = parseTimestamp(options.start, 'start');
   const end = parseTimestamp(options.end, 'end');
   const limit = parseLimit(options.limit);
+  const depth = parsePositiveInt(options.depth, 'depth');
 
   if (start >= end) {
     exitError('--start must be before --end', EXIT.VALIDATION);
@@ -111,10 +115,11 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
+    if (depth) sdkParams.depth = depth;
 
     const result = await (exchangeClient as any).l2Orderbook.history(options.symbol, sdkParams);
     const snapshots = result.data;
-    const envelope = { data: snapshots, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, snapshots);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -123,25 +128,25 @@ export async function l2HistoryCommand(options: L2HistoryOptions): Promise<void>
         records: snapshots.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} L2 Orderbook History (${exchange})`);
         prettyField('Records', snapshots.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L2 Orderbook History (${exchange}) — ${snapshots.length} records`);
+      prettyHeader(`${options.symbol} L2 Orderbook History (${exchange}): ${snapshots.length} records`);
       if (snapshots.length === 0) {
         prettyDim('No L2 orderbook checkpoints found.');
       } else {
         prettyDim(`${snapshots.length} checkpoint records returned`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -197,7 +202,7 @@ export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
 
     const result = await (exchangeClient as any).l2Orderbook.diffs(options.symbol, sdkParams);
     const diffs = result.data;
-    const envelope = { data: diffs, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, diffs);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -206,25 +211,25 @@ export async function l2DiffsCommand(options: L2DiffsOptions): Promise<void> {
         records: diffs.length,
         exchange,
         symbol: options.symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${options.symbol} L2 Diffs (${exchange})`);
         prettyField('Records', diffs.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${options.symbol} L2 Diffs (${exchange}) — ${diffs.length} records`);
+      prettyHeader(`${options.symbol} L2 Diffs (${exchange}): ${diffs.length} records`);
       if (diffs.length === 0) {
         prettyDim('No L2 diffs found.');
       } else {
         prettyDim(`${diffs.length} diff records returned`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

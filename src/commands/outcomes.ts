@@ -11,6 +11,7 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
 import { parseLimit } from '../lib/time.js';
 
 interface OutcomesListOptions {
@@ -51,23 +52,23 @@ export async function outcomesListCommand(options: OutcomesListOptions): Promise
       cursor: options.cursor,
     });
     const data = (result.data as any[]) ?? [];
-    const envelope = { data, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, data);
 
     if (format === 'pretty') {
-      prettyHeader(`HIP-4 Outcomes — ${data.length} markets`);
+      prettyHeader(`HIP-4 Outcomes: ${data.length} markets`);
       if (data.length === 0) {
         prettyDim('No outcome markets found.');
       } else {
         const preview = data.slice(0, 20);
         const rows = preview.map((o: any) => [
-          String(o.outcomeId ?? o.outcome_id ?? '—'),
-          o.name ?? '—',
+          String(o.outcomeId ?? o.outcome_id ?? '-'),
+          o.name ?? '-',
           o.status ?? (o.isSettled ? 'settled' : 'live'),
-          o.expiry ?? '—',
+          o.expiry ?? '-',
         ]);
         prettyTable(['Outcome ID', 'Name', 'Status', 'Expiry'], rows);
         if (data.length > 20) prettyDim(`... and ${data.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

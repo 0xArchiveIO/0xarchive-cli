@@ -77,7 +77,7 @@ describe('HIP-4 candle coverage', () => {
       limit: '100',
       cursor: 'page-1',
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       data: [
         {
           timestamp: '2026-05-02T00:00:00Z',
@@ -89,7 +89,10 @@ describe('HIP-4 candle coverage', () => {
         },
       ],
       nextCursor: 'next-page',
+      hasMore: true,
     });
+    // The request selects the API version the CLI is written against.
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ '0xArchive-Version': '2026-10-01' });
   });
 
   it('allows valid HIP-4 candle CLI requests while retaining range validation', async () => {
@@ -121,6 +124,37 @@ describe('HIP-4 candle coverage', () => {
     expect(new URL(fetchMock.mock.calls[0][0] as string).pathname).toBe(
       '/v1/hyperliquid/hip4/candles/0',
     );
+  });
+
+  it('prints numeric HIP-4 candles in pretty format', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        fakeApiResponse({
+          success: true,
+          data: [{ timestamp: '2026-05-02T00:00:00Z', open: 0.4, high: 0.5, low: 0.3, close: 0.45, volume: 120 }],
+          meta: { count: 1, request_id: 'req-3' },
+        }),
+      ),
+    );
+    interceptExit();
+
+    await candlesCommand({
+      exchange: 'hip4',
+      symbol: '0',
+      start: '2026-05-02T00:00:00Z',
+      end: '2026-05-02T01:00:00Z',
+      interval: '1h',
+      format: 'pretty',
+      apiKey: 'test-key',
+    });
+
+    const output = vi
+      .mocked(process.stdout.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join('');
+    expect(output).toMatch(/2026-05-02T00:00:00Z\s+0\.4\s+0\.5\s+0\.3\s+0\.45\s+120/);
+    expect(process.exit).toHaveBeenCalledWith(0);
   });
 
   it('keeps HIP-4 funding rejected before any network request', async () => {
@@ -183,11 +217,10 @@ describe('HIP-4 candle coverage', () => {
     expect(source).not.toContain('Use --exchange hl or hip3.');
   });
 
-  it('keeps the authenticated Spot inventory coherent across user-facing copy', () => {
+  it('leaves the Spot pair count to `oxa spot pairs` instead of pinning it in user-facing copy', () => {
     const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
     const cliSource = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
-    expect(readme).toContain('326 pairs');
-    expect(cliSource).toContain('326 pairs');
-    expect(`${readme}\n${cliSource}`).not.toContain('294 pairs');
+    expect(`${readme}\n${cliSource}`).not.toMatch(/\b\d+ (spot )?pairs\b/);
+    expect(readme).toContain('oxa spot pairs');
   });
 });

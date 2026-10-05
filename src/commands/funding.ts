@@ -16,7 +16,8 @@ import {
   exitError,
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
-import { parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
+import { pageEnvelope, printNextPage } from '../lib/emit.js';
+import { exampleRange, parseTimestamp, parseLimit, toSdkInterval, validateInterval } from '../lib/time.js';
 
 interface FundingCurrentOptions {
   exchange: string;
@@ -76,7 +77,7 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
     exitError(
       'Funding history requires --start and --end.\n' +
         'Example: oxa funding history --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z',
+        exampleRange(24),
       EXIT.VALIDATION,
     );
   }
@@ -100,10 +101,10 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
       interval: toSdkInterval(interval),
     });
     const rates = result.data;
-    const envelope = { data: rates, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, rates);
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Funding History (${exchange}) — ${rates.length} records`);
+      prettyHeader(`${options.symbol} Funding History (${exchange}): ${rates.length} records`);
 
       if (rates.length === 0) {
         prettyDim('No funding rates found.');
@@ -111,17 +112,15 @@ export async function fundingHistoryCommand(options: FundingHistoryOptions): Pro
         const preview = rates.slice(0, 20);
         const rows = preview.map((r: any) => [
           r.timestamp,
-          r.fundingRate ?? r.rate ?? '—',
-          r.premium ?? '—',
+          r.fundingRate ?? r.rate ?? '-',
+          r.premium ?? '-',
         ]);
         prettyTable(['Timestamp', 'Rate', 'Premium'], rows);
 
         if (rates.length > 20) {
           prettyDim(`... and ${rates.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {

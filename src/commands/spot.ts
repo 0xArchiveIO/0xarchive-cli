@@ -3,10 +3,10 @@
 // PURR-USDC); the server resolves dashed to wire format internally.
 //
 // Spot has no funding, open interest, or liquidations. Historical OHLCV
-// candles are served from 2025-03-22T10:50:22Z at the dedicated Spot route.
+// candles are served from 2025-03-22 10:50 UTC at the dedicated Spot route.
 //
-// Coverage: trades from 2025-03-22 (S3 backfill); orderbook, L4, TWAP live
-// from 2026-05-05.
+// Coverage (`oxa capabilities --exchange spot`): trades from 2025-03-22
+// 10:50:22 UTC; TWAP, order book and L4 from 2026-05-05. TWAP is REST only.
 
 import {
   resolveApiKey,
@@ -24,6 +24,7 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import {
+  exampleRange,
   parseTimestamp,
   parseLimit,
   parsePositiveInt,
@@ -32,8 +33,9 @@ import {
 import { writeOutputFile } from '../lib/file.js';
 import { SpotCandlesClient } from '../lib/spot-candles.js';
 import { getSpotL4Resource } from '../lib/sdk.js';
-import { emitPage, toPage } from '../lib/emit.js';
+import { emitPage, hasMore, pageEnvelope, printNextPage, toPage } from '../lib/emit.js';
 import { compact } from '../lib/positions.js';
+import { parseChoice } from '../lib/params.js';
 
 interface BaseFormatOpts {
   apiKey?: string;
@@ -51,16 +53,16 @@ export async function spotPairsList(options: BaseFormatOpts): Promise<void> {
     const pairs = await client.spot.pairs.list();
 
     if (format === 'pretty') {
-      prettyHeader(`Spot Pairs (hyperliquid) — ${pairs.length} total`);
+      prettyHeader(`Spot Pairs (hyperliquid): ${pairs.length} total`);
       if (pairs.length === 0) {
         prettyDim('No pairs found.');
       } else {
         const rows = pairs.map((p: any) => [
-          p.symbol ?? '—',
-          p.baseAsset ?? '—',
-          p.quoteAsset ?? '—',
-          p.wireSymbol ?? '—',
-          p.markPrice != null ? String(p.markPrice) : '—',
+          p.symbol ?? '-',
+          p.baseAsset ?? '-',
+          p.quoteAsset ?? '-',
+          p.wireSymbol ?? '-',
+          p.markPrice != null ? String(p.markPrice) : '-',
           p.isActive === false ? 'inactive' : 'active',
         ]);
         prettyTable(['Symbol', 'Base', 'Quote', 'Wire', 'Mark Price', 'Status'], rows);
@@ -136,7 +138,7 @@ export async function spotCandles(
     exitError(
       'Spot candles require --start and --end.\n' +
         'Example: oxa spot candles HYPE-USDC ' +
-        '--start 2025-03-22T10:50:22Z --end 2025-03-22T11:50:22Z --interval 1h',
+        `${exampleRange(24)} --interval 1h`,
       EXIT.VALIDATION,
     );
   }
@@ -159,7 +161,7 @@ export async function spotCandles(
       cursor: options.cursor,
     });
     const candles = result.data;
-    const envelope = { data: candles, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, candles);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -169,7 +171,7 @@ export async function spotCandles(
         exchange: 'spot',
         symbol,
         interval: interval ?? '1h',
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
@@ -177,13 +179,13 @@ export async function spotCandles(
         prettyField('Records', candles.length);
         prettyField('Interval', interval ?? '1h');
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${symbol} Candles (spot) — ${candles.length} records`);
+      prettyHeader(`${symbol} Candles (spot): ${candles.length} records`);
       prettyField('Interval', interval ?? '1h');
 
       if (candles.length === 0) {
@@ -201,7 +203,7 @@ export async function spotCandles(
         prettyTable(['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'], rows);
 
         if (candles.length > 20) prettyDim(`... and ${candles.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -274,10 +276,12 @@ export async function spotTrades(
     end?: string;
     limit?: string;
     cursor?: string;
+    side?: string;
     out?: string;
   },
 ): Promise<void> {
   const format = validateFormat(options.format);
+  const side = parseChoice(options.side, 'side', ['buy', 'sell'] as const);
   const apiKey = resolveApiKey(options.apiKey);
   const limit = parseLimit(options.limit);
 
@@ -295,7 +299,7 @@ export async function spotTrades(
     exitError(
       'Spot trades require a time range. Provide --start and --end.\n' +
         'Example: oxa spot trades HYPE-USDC ' +
-        '--start 2026-05-01T00:00:00Z --end 2026-05-01T01:00:00Z',
+        exampleRange(1),
       EXIT.VALIDATION,
     );
   }
@@ -313,10 +317,11 @@ export async function spotTrades(
     const sdkParams: Record<string, unknown> = { start, end };
     if (limit) sdkParams.limit = limit;
     if (options.cursor) sdkParams.cursor = options.cursor;
+    if (side) sdkParams.side = side;
 
     const result = await client.spot.trades.list(symbol, sdkParams as any);
     const trades = result.data;
-    const envelope = { data: trades, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, trades);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -325,20 +330,20 @@ export async function spotTrades(
         records: trades.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Trades (spot)`);
         prettyField('Records', trades.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${symbol} Trades (spot) — ${trades.length} records`);
+      prettyHeader(`${symbol} Trades (spot): ${trades.length} records`);
       if (trades.length === 0) {
         prettyDim('No trades found.');
       } else {
@@ -351,7 +356,7 @@ export async function spotTrades(
         ]);
         prettyTable(['Timestamp', 'Side', 'Price', 'Size'], rows);
         if (trades.length > 20) prettyDim(`... and ${trades.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -431,7 +436,7 @@ async function spotL4Range(symbol: string, options: SpotL4RangeOptions, kind: 'd
         prettyDim(kind === 'diffs' ? 'No L4 diffs found.' : 'No L4 checkpoints found.');
       } else {
         prettyDim(`${records.length} ${kind === 'diffs' ? 'diff' : 'checkpoint'} records returned`);
-        if (page.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(page);
       }
     });
     process.exit(EXIT.SUCCESS);
@@ -479,7 +484,7 @@ export async function spotOrdersHistory(
 
     const result = await client.spot.orders.history(symbol, sdkParams as any);
     const orders = result.data;
-    const envelope = { data: orders, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, orders);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -488,20 +493,20 @@ export async function spotOrdersHistory(
         records: orders.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} Order History (spot)`);
         prettyField('Records', orders.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${symbol} Order History (spot) — ${orders.length} records`);
+      prettyHeader(`${symbol} Order History (spot): ${orders.length} records`);
       if (orders.length === 0) {
         prettyDim('No orders found.');
       } else {
@@ -516,7 +521,7 @@ export async function spotOrdersHistory(
         ]);
         prettyTable(['Timestamp', 'Side', 'Price', 'Size', 'Status', 'User'], rows);
         if (orders.length > 20) prettyDim(`... and ${orders.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -560,7 +565,7 @@ export async function spotTwapBySymbol(
 
     const result = await client.spot.twap.bySymbol(symbol, sdkParams as any);
     const statuses = result.data;
-    const envelope = { data: statuses, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, statuses);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -569,35 +574,35 @@ export async function spotTwapBySymbol(
         records: statuses.length,
         exchange: 'spot',
         symbol,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
         prettyHeader(`${symbol} TWAP Statuses (spot)`);
         prettyField('Records', statuses.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`${symbol} TWAP Statuses (spot) — ${statuses.length} records`);
+      prettyHeader(`${symbol} TWAP Statuses (spot): ${statuses.length} records`);
       if (statuses.length === 0) {
         prettyDim('No TWAP statuses found.');
       } else {
         const preview = statuses.slice(0, 20);
         const rows = preview.map((s: any) => [
           s.timestamp,
-          s.coin ?? '—',
-          s.side === 'B' ? 'BUY' : s.side === 'A' ? 'SELL' : '—',
-          s.status ?? '—',
-          s.userAddress ?? '—',
-          String(s.twapId ?? '—'),
+          s.coin ?? '-',
+          s.side === 'B' ? 'BUY' : s.side === 'A' ? 'SELL' : '-',
+          s.status ?? '-',
+          s.userAddress ?? '-',
+          String(s.twapId ?? '-'),
         ]);
         prettyTable(['Timestamp', 'Coin', 'Side', 'Status', 'User', 'TWAP ID'], rows);
         if (statuses.length > 20) prettyDim(`... and ${statuses.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -641,7 +646,7 @@ export async function spotTwapByUser(
 
     const result = await client.spot.twap.byUser(user, sdkParams as any);
     const statuses = result.data;
-    const envelope = { data: statuses, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, statuses);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
@@ -650,7 +655,7 @@ export async function spotTwapByUser(
         records: statuses.length,
         exchange: 'spot',
         user,
-        has_more: !!result.nextCursor,
+        has_more: hasMore(result),
         nextCursor: result.nextCursor ?? null,
       };
       if (format === 'pretty') {
@@ -658,13 +663,13 @@ export async function spotTwapByUser(
         prettyField('User', user);
         prettyField('Records', statuses.length);
         prettyField('Written to', options.out);
-        prettyField('Has more', result.nextCursor ? 'yes' : 'no');
+        prettyField('Has more', hasMore(result) ? 'yes' : 'no');
         process.stdout.write('\n');
       } else {
         outputJson(summary);
       }
     } else if (format === 'pretty') {
-      prettyHeader(`User TWAP Statuses (spot) — ${statuses.length} records`);
+      prettyHeader(`User TWAP Statuses (spot): ${statuses.length} records`);
       prettyField('User', user);
       if (statuses.length === 0) {
         prettyDim('No TWAP statuses found.');
@@ -672,14 +677,14 @@ export async function spotTwapByUser(
         const preview = statuses.slice(0, 20);
         const rows = preview.map((s: any) => [
           s.timestamp,
-          s.coin ?? '—',
-          s.side === 'B' ? 'BUY' : s.side === 'A' ? 'SELL' : '—',
-          s.status ?? '—',
-          String(s.twapId ?? '—'),
+          s.coin ?? '-',
+          s.side === 'B' ? 'BUY' : s.side === 'A' ? 'SELL' : '-',
+          s.status ?? '-',
+          String(s.twapId ?? '-'),
         ]);
         prettyTable(['Timestamp', 'Coin', 'Side', 'Status', 'TWAP ID'], rows);
         if (statuses.length > 20) prettyDim(`... and ${statuses.length - 20} more`);
-        if (result.nextCursor) prettyDim('More data available (use --cursor to paginate)');
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -695,7 +700,7 @@ export async function spotTwapByUser(
 // ── oxa spot freshness <symbol> ────────────────────────────────────────────
 
 function formatLag(lagMs: number | undefined | null): string {
-  if (lagMs === undefined || lagMs === null) return '—';
+  if (lagMs === undefined || lagMs === null) return '-';
   if (lagMs < 1000) return `${lagMs}ms`;
   if (lagMs < 60_000) return `${(lagMs / 1000).toFixed(1)}s`;
   if (lagMs < 3_600_000) return `${(lagMs / 60_000).toFixed(1)}m`;
@@ -729,7 +734,7 @@ export async function spotFreshness(symbol: string, options: BaseFormatOpts): Pr
 
       const rows = dataTypes.map((dt) => [
         dt.name,
-        dt.info?.lastUpdated ?? '—',
+        dt.info?.lastUpdated ?? '-',
         formatLag(dt.info?.lagMs),
       ]);
 

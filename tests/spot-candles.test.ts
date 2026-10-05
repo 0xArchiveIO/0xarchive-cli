@@ -36,6 +36,35 @@ describe('Hyperliquid Spot candle coverage', () => {
     vi.unstubAllEnvs();
   });
 
+  it('prints numeric Spot candles in pretty format', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        fakeApiResponse({
+          success: true,
+          data: [{ timestamp: '2026-09-01T00:00:00Z', open: 90.5, high: 91.25, low: 90, close: 91, volume: 1234.5 }],
+          meta: { count: 1, request_id: 'req-spot-pretty' },
+        }),
+      ),
+    );
+    interceptExit();
+
+    await spotCandles('HYPE-USDC', {
+      start: '2026-09-01T00:00:00Z',
+      end: '2026-09-01T01:00:00Z',
+      interval: '1h',
+      format: 'pretty',
+      apiKey: 'test-key',
+    });
+
+    const output = vi
+      .mocked(process.stdout.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join('');
+    expect(output).toMatch(/2026-09-01T00:00:00Z\s+90\.5\s+91\.25\s+90\s+91\s+1234\.5/);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
   it('routes Spot candles and preserves opaque cursor metadata', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       fakeApiResponse({
@@ -75,7 +104,7 @@ describe('Hyperliquid Spot candle coverage', () => {
       limit: '1000',
       cursor: 'opaque.cursor/v0',
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       data: [
         {
           timestamp: '2025-03-22T10:51:00Z',
@@ -89,7 +118,10 @@ describe('Hyperliquid Spot candle coverage', () => {
         },
       ],
       nextCursor: 'opaque.cursor/v1',
+      hasMore: true,
     });
+    // The request selects the API version the CLI is written against.
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ '0xArchive-Version': '2026-10-01' });
   });
 
   it('allows the Spot candle command and uses the Spot route', async () => {
@@ -146,7 +178,7 @@ describe('Hyperliquid Spot candle coverage', () => {
     const spotSource = readFileSync(new URL('../src/commands/spot.ts', import.meta.url), 'utf8');
 
     expect(cliSource).toContain(".command('candles <symbol>')");
-    expect(readme).toContain('Spot candles from 2025-03-22T10:50:22Z');
+    expect(readme).toContain('Spot candles from 2025-03-22 10:50 UTC');
     expect(readme).toContain('oxa spot candles HYPE-USDC');
     expect(`${readme}\n${cliSource}\n${spotSource}`).not.toContain(
       'Spot has no funding, open interest, liquidations, or candles',

@@ -1,7 +1,7 @@
 // The @0xarchive/sdk resources added in the SDK floor release: breadth, CVD,
 // the HIP-3 oracle, HIP-4 questions and outcome slugs, wallet classification,
 // the symbol universe, liquidation and trigger levels, data quality, Spot L4
-// history, and webhooks.
+// history, webhooks, capabilities, and the WebSocket channel table.
 //
 // The interfaces below describe the calls the CLI makes, so the commands
 // type-check on their own and fail with a clear message on an SDK install
@@ -141,6 +141,59 @@ export interface WebhookVerifier {
     header: string,
   ): { timestamp: string; timestampSeconds: number; signatures: string[] } | null;
   WebhookSignatureError: new (...args: never[]) => Error & { reason: string };
+}
+
+/**
+ * One row of `GET /v1/capabilities`: what a venue serves for one datatype,
+ * over REST and WebSocket, and from when.
+ */
+export interface CapabilityRow {
+  venue: string;
+  datatype: string;
+  restRoutes: string[];
+  wsChannels: string[];
+  live: boolean;
+  replay: boolean;
+  availableFrom: string | null;
+  cadence: string;
+  pageLimit: number | null;
+  intervals: string[];
+  notes: string | null;
+}
+
+/** What one WebSocket channel offers, from the SDK's channel table. */
+export interface WsChannelCapability {
+  venue: string;
+  datatype: string;
+  live: boolean;
+  replay: boolean;
+  /** Bulk replay: single-channel, an explicit end, speed ignored, an `l4_snapshot` then `l4_batch` pages. */
+  bulkReplay: boolean;
+}
+
+/** `client.capabilities()`: `GET /v1/capabilities`. */
+export function getCapabilities(client: OxArchive): () => Promise<CapabilityRow[]> {
+  const capabilities = (client as unknown as { capabilities?: () => Promise<CapabilityRow[]> }).capabilities;
+  if (typeof capabilities !== 'function') sdkTooOld('capabilities');
+  return () => capabilities.call(client);
+}
+
+/**
+ * The SDK's WebSocket channel table (`WS_CHANNEL_CAPABILITIES`), which mirrors
+ * `/v1/capabilities`. The stream and replay commands allow exactly what it
+ * allows, so the CLI keeps no channel list of its own.
+ */
+export function wsChannelCapabilities(): Readonly<Record<string, WsChannelCapability>> {
+  const table = installedWsChannelCapabilities();
+  if (!table) sdkTooOld('the WebSocket channel table');
+  return table;
+}
+
+/** The SDK's channel table, or undefined on an SDK release older than the floor. */
+export function installedWsChannelCapabilities(): Readonly<Record<string, WsChannelCapability>> | undefined {
+  const table = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, WsChannelCapability> })
+    .WS_CHANNEL_CAPABILITIES;
+  return table && typeof table === 'object' ? table : undefined;
 }
 
 function venueClient(client: OxArchive, venue: HyperliquidVenue): unknown {

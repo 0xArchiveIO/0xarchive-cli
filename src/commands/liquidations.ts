@@ -20,10 +20,10 @@ import {
 } from '../lib/output.js';
 import { handleError } from '../lib/errors.js';
 import { writeOutputFile } from '../lib/file.js';
-import { parseTimestamp, parseLimit } from '../lib/time.js';
+import { exampleRange, parseTimestamp, parseLimit } from '../lib/time.js';
 import { getLiquidationLevelsResource, hyperliquidVenue } from '../lib/sdk.js';
 import { levelHistoryParams, levelParams, type LevelHistoryOptions, type LevelOptions } from '../lib/levels.js';
-import { cell, emitDocument, emitPage, field, printMore, toPage } from '../lib/emit.js';
+import { cell, emitDocument, emitPage, field, pageEnvelope, printMore, printNextPage, toPage } from '../lib/emit.js';
 
 interface LiquidationsOptions {
   exchange: string;
@@ -105,7 +105,7 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
     exitError(
       'Liquidations require --start and --end.\n' +
         'Example: oxa liquidations history --exchange hyperliquid --symbol BTC ' +
-        '--start 2026-01-01T00:00:00Z --end 2026-01-01T01:00:00Z',
+        exampleRange(1),
       EXIT.VALIDATION,
     );
   }
@@ -127,10 +127,10 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
       cursor: options.cursor,
     });
     const liqs = result.data;
-    const envelope = { data: liqs, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, liqs);
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Liquidations (${exchange}) — ${liqs.length} records`);
+      prettyHeader(`${options.symbol} Liquidations (${exchange}): ${liqs.length} records`);
 
       if (liqs.length === 0) {
         prettyDim('No liquidations found.');
@@ -161,9 +161,7 @@ export async function liquidationsCommand(options: LiquidationsOptions): Promise
         if (liqs.length > 20) {
           prettyDim(`... and ${liqs.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -200,14 +198,14 @@ export async function liquidationsVolumeCommand(options: LiquidationsVolumeOptio
       cursor: options.cursor,
     });
     const buckets = result.data;
-    const envelope = { data: buckets, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, buckets);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
     }
 
     if (format === 'pretty') {
-      prettyHeader(`${options.symbol} Liquidation Volume (${exchange}) — ${buckets.length} buckets`);
+      prettyHeader(`${options.symbol} Liquidation Volume (${exchange}): ${buckets.length} buckets`);
 
       if (buckets.length === 0) {
         prettyDim('No volume data found.');
@@ -234,9 +232,7 @@ export async function liquidationsVolumeCommand(options: LiquidationsVolumeOptio
         if (buckets.length > 20) {
           prettyDim(`... and ${buckets.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -282,14 +278,14 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
       cursor: options.cursor,
     });
     const liqs = result.data;
-    const envelope = { data: liqs, nextCursor: result.nextCursor ?? null };
+    const envelope = pageEnvelope(result, liqs);
 
     if (options.out) {
       writeOutputFile(options.out, envelope);
     }
 
     if (format === 'pretty') {
-      prettyHeader(`Liquidations for ${options.user.slice(0, 10)}... (${exchange}) — ${liqs.length} records`);
+      prettyHeader(`Liquidations for ${options.user.slice(0, 10)}... (${exchange}): ${liqs.length} records`);
 
       if (liqs.length === 0) {
         prettyDim('No liquidations found for this user.');
@@ -297,7 +293,7 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
         const preview = liqs.slice(0, 20);
         const rows = preview.map((l: any) => [
           l.timestamp,
-          l.coin ?? '—',
+          l.coin ?? '-',
           l.side === 'B' ? 'LONG' : 'SHORT',
           l.price,
           l.size,
@@ -307,9 +303,7 @@ export async function liquidationsUserCommand(options: LiquidationsUserOptions):
         if (liqs.length > 20) {
           prettyDim(`... and ${liqs.length - 20} more`);
         }
-        if (result.nextCursor) {
-          prettyDim('More data available (use --cursor to paginate)');
-        }
+        printNextPage(result);
       }
       process.stdout.write('\n');
     } else {
@@ -419,7 +413,7 @@ export async function liquidationsLevelsHistoryCommand(options: LiquidationLevel
           ];
         }),
       );
-      printMore(shown.length, snapshots.length, page.nextCursor);
+      printMore(shown.length, snapshots.length, page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {

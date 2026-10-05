@@ -1,4 +1,4 @@
-// Thin HIP-4 command surface — maps `oxa hip4 <verb> <coin>` to the underlying
+// Thin HIP-4 command surface: maps `oxa hip4 <verb> <coin>` to the underlying
 // shared command implementations with `--exchange hip4` baked in. Coins are
 // passed positionally as bare numerics (e.g. `oxa hip4 orderbook 0`, where `0`
 // means outcome 0 / side 0). The legacy `#0` / `%230` forms still work because
@@ -63,6 +63,7 @@ export async function hip4Trades(
     end?: string;
     limit?: string;
     cursor?: string;
+    side?: string;
     out?: string;
     recent?: boolean;
   },
@@ -147,6 +148,7 @@ export async function hip4OrdersHistory(
     user?: string;
     status?: string;
     orderType?: string;
+    triggered?: string;
     limit?: string;
     cursor?: string;
     out?: string;
@@ -279,7 +281,7 @@ export async function hip4QuestionsList(options: {
       }
       const shown = questions.slice(0, 20);
       prettyTable(['Question', 'Name', 'Named Outcomes', 'Fallback', 'Settled', 'Description'], shown.map(questionRow));
-      printMore(shown.length, questions.length, page.nextCursor);
+      printMore(shown.length, questions.length, page);
     });
     process.exit(EXIT.SUCCESS);
   } catch (error) {
