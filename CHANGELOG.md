@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.0 - 2026-09-28
+## 1.10.0 - 2026-10-05
 
 This release adopts the 0xArchive API contract `2026-10-01`. Every request selects that API version (the `0xArchive-Version: 2026-10-01` header on REST, `version=2026-10-01` on WebSocket connections), and the CLI reads the response shapes of that version. The changes this brings are listed under Added and Changed.
 
