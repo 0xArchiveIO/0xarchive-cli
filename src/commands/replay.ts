@@ -115,14 +115,6 @@ export async function streamReplayCommand(channel: string, symbol: string, optio
   }
   const apiKey = resolveApiKey(options.apiKey);
 
-  if (typeof (globalThis as { WebSocket?: unknown }).WebSocket !== 'function') {
-    exitError(
-      'WebSocket replay requires Node.js 22+ (global WebSocket). ' +
-        'Upgrade Node, or use the historical REST commands (e.g. `oxa trades history`).',
-      EXIT.INTERNAL,
-    );
-  }
-
   const request: ReplayRequest = { start, end, ...(speed !== undefined ? { speed } : {}), ...(interval ? { interval } : {}) };
 
   // The SDK connects with the API version (`version=`) it parses.

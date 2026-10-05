@@ -269,10 +269,17 @@ describe.runIf(CHANNEL_TABLE)('oxa stream replay', () => {
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 
-  it('asks for Node 22 when there is no global WebSocket', async () => {
+  it('connects without a global WebSocket, as on Node.js 18 and 20', async () => {
     vi.stubGlobal('WebSocket', undefined);
-    expect(await runCli('stream', 'replay', 'trades', 'BTC', '--start', START, '--end', END)).toBe(5);
-    expect(lastError().error).toMatch(/^WebSocket replay requires Node\.js 22\+/);
+    // The failure is reported from a socket event, so exit records the code
+    // instead of throwing out of the event handler.
+    vi.mocked(process.exit).mockImplementation((() => undefined) as never);
+    const args = ['trades', 'BTC', '--start', START, '--end', END, '--url', 'ws://127.0.0.1:1/ws'];
+    expect(await runCli('stream', 'replay', ...args)).toBe(4);
+    expect(JSON.parse(String(vi.mocked(process.stderr.write).mock.calls[0][0])).error).toBe(
+      'websocket closed before open (code=1006). Check the URL and your API key.',
+    );
+    expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 });
 

@@ -4,7 +4,7 @@
  * Skipped unless OXA_LIVE_API_KEY is set (a separate variable from
  * OXA_API_KEY, so a key exported for everyday use never sends test traffic):
  *   OXA_LIVE_API_KEY=0xa_... npx vitest run tests/live.test.ts
- * Optional: OXA_BASE_URL and OXA_WS_URL. The WebSocket check needs Node 22+.
+ * Optional: OXA_BASE_URL and OXA_WS_URL.
  */
 import * as sdk from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -158,7 +158,7 @@ describe.skipIf(!liveKey)('live API contract', () => {
     expect(stdoutJson().length).toBe(old.length);
   }, 30_000);
 
-  it.runIf(typeof (globalThis as { WebSocket?: unknown }).WebSocket === 'function' && CHANNEL_TABLE)(
+  it.runIf(CHANNEL_TABLE)(
     'replays HIP-3 L4 in bulk over the WebSocket',
     async () => {
       vi.spyOn(process, 'on').mockImplementation(() => process);
@@ -176,6 +176,24 @@ describe.skipIf(!liveKey)('live API contract', () => {
       expect(types[0]).toBe('replay_started');
       expect(types).toContain('l4_snapshot');
       expect(types.at(-1)).toBe('replay_completed');
+    },
+    60_000,
+  );
+
+  // The BTC L4 snapshot is several megabytes once decompressed.
+  it.runIf(CHANNEL_TABLE)(
+    'streams the BTC L4 snapshot and diffs live',
+    async () => {
+      vi.spyOn(process, 'on').mockImplementation(() => process);
+      await parseCli('stream', 'subscribe', 'l4_diffs', 'BTC', '--duration-ms', '10000');
+      await vi.waitFor(() => expect(process.exit).toHaveBeenCalled(), { timeout: 45_000, interval: 250 });
+      expect(vi.mocked(process.exit).mock.calls[0][0]).toBe(0);
+      const types = stdoutText()
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line).type);
+      expect(types[0]).toBe('l4_snapshot');
+      expect(types).toContain('l4_batch');
     },
     60_000,
   );

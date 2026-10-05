@@ -51,7 +51,9 @@ This release adopts the 0xArchive API contract `2026-10-01`. Every request selec
 - Pretty output names the cursor to pass back when another page follows (`More data available: rerun with --cursor <cursor>`).
 - Pretty output uses plain punctuation: headers read `BTC Candles (hyperliquid): 24 records`, and a table cell with no value shows `-`.
 - The usage examples in error messages (for a missing `--start` or `--end`) use a window from yesterday, so they run on every plan, including Free's 30-day history window.
-- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, Lighter liquidations, webhooks, CVD, Hyperliquid and HIP-3 breadth, the HIP-3 oracle, HIP-4 questions, wallet classification, the symbol list, positions freshness, `capabilities()`, the WebSocket channel table, error codes, `hasMore`, and the `side`, `triggered`, and `depth` parameters.
+- `oxa stream` and `oxa stream replay` run on Node.js 18 and 20 as well. They needed Node.js 22 or later, for its built-in `WebSocket`, and exited with code 5 on earlier releases.
+- A WebSocket connection error, such as a refused connection or a rejected API key, prints `websocket error: WebSocket connection error` on every Node.js release; the text after `websocket error:` came from the Node.js runtime and differed between releases. The exit code, 4, is unchanged.
+- Requires `@0xarchive/sdk` 1.12.0 or newer, the release with the Robinhood Chain client, the positions resources, Lighter liquidations, webhooks, CVD, Hyperliquid and HIP-3 breadth, the HIP-3 oracle, HIP-4 questions, wallet classification, the symbol list, positions freshness, `capabilities()`, the WebSocket channel table, the WebSocket client that connects with the `ws` package in Node.js, error codes, `hasMore`, and the `side`, `triggered`, and `depth` parameters.
 
 ### Removed
 
@@ -60,6 +62,7 @@ This release adopts the 0xArchive API contract `2026-10-01`. Every request selec
 
 ### Fixed
 
+- On Node.js 24.15, live streams with large messages failed with `websocket error` and exit code 4: the built-in `WebSocket` closed the connection when a compressed message was larger than about 4 MB once decompressed, which the L4 snapshot of a deep book is (`oxa stream subscribe l4_diffs BTC`). Live streams now run on the SDK's WebSocket client, as `oxa stream replay` does, and it connects with the `ws` package in Node.js. The NDJSON and pretty output, flags, and exit codes are the same as on Node.js 22.
 - `--format pretty` failed with a `padEnd is not a function` error whenever a table cell held a number, which included `oxa candles history` on every venue. The table printer now writes every cell as text: numbers keep all their digits without exponent notation, missing values show as `-`, and objects are written as JSON.
 - JSON output larger than the pipe buffer (64 KiB) was cut off when piped to another program, for example `oxa trades fetch ... | jq`, because the process exited before stdout drained. Output is now written in full before the process exits.
 - A reader that closes the pipe early (`oxa stream ... | head`) no longer ends the CLI with an EPIPE stack trace; it exits quietly with code 0.

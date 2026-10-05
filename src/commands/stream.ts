@@ -1,12 +1,14 @@
-// Realtime WebSocket streaming. Uses the global `WebSocket` available in
-// Node 22+ (the CLI declares engines.node >= 18 but the stream commands
-// require >= 22; we surface a clear error if WebSocket isn't available).
+// Realtime WebSocket streaming through the SDK client (OxArchiveWs), the same
+// client `oxa stream replay` uses. In Node.js it connects with the `ws`
+// package, so streaming works on every Node.js release the CLI supports and
+// a large message, such as the L4 snapshot of a deep book, arrives intact.
 //
 // Each `oxa stream <channel> <symbol>` command opens a single subscription,
 // emits one JSON record per stdout line (NDJSON), and runs until the user
 // hits Ctrl-C. JSON mode is the default; `--format pretty` adds a one-line
 // human-readable summary per event.
 
+import { OxArchiveWs } from '@0xarchive/sdk';
 import { resolveApiKey } from '../lib/client.js';
 import {
   validateFormat,
@@ -15,8 +17,7 @@ import {
   prettyDim,
 } from '../lib/output.js';
 import { exitWsError } from '../lib/errors.js';
-import { API_VERSION } from '../lib/http.js';
-import { installedWsChannelCapabilities, wsChannelCapabilities, type WsChannelCapability } from '../lib/sdk.js';
+import { wsChannelCapabilities, type WsChannelCapability } from '../lib/sdk.js';
 
 const DEFAULT_WS_URL = 'wss://api.0xarchive.io/ws';
 
@@ -87,16 +88,6 @@ export function requireLiveChannel(channel: string): void {
   refuseUnlessLive(channel, capability);
 }
 
-/**
- * The same check for the channel a dedicated verb resolved to. On an SDK
- * release older than the floor, which has no channel table, the verb streams
- * as before.
- */
-function requireLiveVerbChannel(channel: string): void {
-  const table = installedWsChannelCapabilities();
-  if (table && Object.hasOwn(table, channel)) refuseUnlessLive(channel, table[channel]);
-}
-
 function refuseUnlessLive(channel: string, capability: WsChannelCapability): void {
   if (capability.live) return;
   if (!capability.replay) {
@@ -121,12 +112,6 @@ export function liveChannels(): string[] {
   return Object.keys(table)
     .filter((channel) => table[channel].live)
     .sort();
-}
-
-/** Add the API version the CLI is written against to a WebSocket URL. */
-export function wsUrlWithVersion(baseUrl: string): string {
-  if (/[?&]version=/.test(baseUrl)) return baseUrl;
-  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}version=${API_VERSION}`;
 }
 
 // A connection that falls behind a Lighter live channel (either deployment)
@@ -240,22 +225,28 @@ export function wsSymbol(channel: string, symbol: string): string {
   return /^\d+$/.test(digits) ? `#${digits}` : trimmed;
 }
 
-export function buildSubscribeMessage(
-  channel: string,
-  symbol: string,
-  intervalMs?: number,
-): Record<string, unknown> {
-  const message: Record<string, unknown> = { op: 'subscribe', channel, symbol };
-  if (intervalMs !== undefined) message.interval_ms = intervalMs;
-  return message;
-}
-
 // Best-effort event time for the pretty summary line. Replay rows carry
 // `timestamp`; live books and fills carry `time` (fills arrive as an array).
 function eventTime(payload: any): string | number {
   const data = payload?.data;
   const first = Array.isArray(data) ? data[0] : data;
   return first?.timestamp ?? first?.time ?? payload?.timestamp ?? '';
+}
+
+/**
+ * The part of the SDK's WebSocket client a live stream uses. The SDK release
+ * the CLI requires has all of it; the interface lets the command type-check
+ * against older releases too, as the replay command does.
+ */
+interface LiveClient {
+  connect(handlers: {
+    onOpen?: () => void;
+    onMessage?: (message: any) => void;
+    onClose?: (code: number, reason: string) => void;
+    onError?: (error: Error) => void;
+  }): Promise<void>;
+  subscribe(channel: string, symbol: string, options?: { intervalMs?: number }): void;
+  disconnect(): void;
 }
 
 async function streamChannel(
@@ -269,42 +260,41 @@ async function streamChannel(
   const intervalMs = parseIntervalMs(options.intervalMs, channel);
   const apiKey = resolveApiKey(options.apiKey);
 
-  if (typeof (globalThis as any).WebSocket !== 'function') {
-    exitError(
-      'WebSocket streaming requires Node.js 22+ (global WebSocket). ' +
-        'Upgrade Node, or use the historical REST endpoints (e.g. `oxa liquidations history`).',
-      EXIT.INTERNAL,
-    );
-  }
-
-  const baseUrl = options.url ?? process.env.OXA_WS_URL ?? DEFAULT_WS_URL;
-  const separator = baseUrl.includes('?') ? '&' : '?';
-  const url = wsUrlWithVersion(`${baseUrl}${separator}apiKey=${encodeURIComponent(apiKey)}`);
-
-  const WS = (globalThis as any).WebSocket as {
-    new (url: string): WebSocket;
-  };
-  const ws = new WS(url);
+  // The SDK adds the key and the API version (`version=`) to the URL. A
+  // dropped connection ends the command rather than reconnecting, so the
+  // output never joins two sessions without a sign of the gap.
+  const ws = new OxArchiveWs({
+    apiKey,
+    wsUrl: options.url ?? process.env.OXA_WS_URL ?? DEFAULT_WS_URL,
+    autoReconnect: false,
+  }) as unknown as LiveClient;
 
   let opened = false;
   // Set when the CLI closes the socket itself (--duration-ms or Ctrl-C). The
   // server may end the session without a close handshake, which surfaces as
-  // an `error` event followed by a 1006 close; that is a normal stop here.
+  // an error followed by a 1006 close; that is a normal stop here.
   let closing = false;
   let timer: NodeJS.Timeout | undefined;
 
   const closeSocket = () => {
     closing = true;
     try {
-      ws.close();
+      ws.disconnect();
     } catch {
       // ignore
     }
   };
 
-  ws.addEventListener('open', () => {
+  // The SDK sends the subscription when the socket opens. It refuses the same
+  // channels and intervals as the checks above, before anything is sent.
+  try {
+    ws.subscribe(channel, symbol, intervalMs !== undefined ? { intervalMs } : undefined);
+  } catch (error) {
+    exitError(error instanceof Error ? error.message : String(error), EXIT.VALIDATION);
+  }
+
+  const onOpen = () => {
     opened = true;
-    ws.send(JSON.stringify(buildSubscribeMessage(channel, symbol, intervalMs)));
     if (format === 'pretty') {
       const interval = intervalMs !== undefined ? ` interval_ms=${intervalMs}` : '';
       prettyDim(`subscribed: channel=${channel} symbol=${symbol}${interval}`);
@@ -312,17 +302,14 @@ async function streamChannel(
     if (durationMs !== undefined) {
       timer = setTimeout(closeSocket, durationMs);
     }
-  });
+  };
 
-  ws.addEventListener('message', (event: MessageEvent) => {
-    let payload: any;
-    try {
-      payload = JSON.parse(typeof event.data === 'string' ? event.data : String(event.data));
-    } catch {
-      return;
-    }
+  const onMessage = (payload: any) => {
+    // Once the CLI stops the stream, messages still in flight are not written.
+    // Replies to the SDK's keep-alive pings carry no data.
+    if (closing || payload?.type === 'pong') return;
 
-    if (payload?.type === 'subscribed' || payload?.type === 'unsubscribed' || payload?.type === 'pong') {
+    if (payload?.type === 'subscribed' || payload?.type === 'unsubscribed') {
       if (format === 'pretty') {
         prettyDim(`${payload.type}${payload.channel ? ` ${payload.channel}` : ''}`);
       }
@@ -347,27 +334,34 @@ async function streamChannel(
     } else {
       process.stdout.write(JSON.stringify(payload) + '\n');
     }
-  });
+  };
 
-  ws.addEventListener('error', (event: Event) => {
+  const onError = (error: Error) => {
     if (closing) return;
-    const message = (event as any)?.message ?? 'WebSocket error';
-    exitError(`websocket error: ${message}`, EXIT.NETWORK);
-  });
+    exitError(`websocket error: ${error?.message ?? 'WebSocket error'}`, EXIT.NETWORK);
+  };
 
-  ws.addEventListener('close', (event: any) => {
+  const onClose = (code: number) => {
     if (timer) clearTimeout(timer);
     if (!opened && !closing) {
       exitError(
-        `websocket closed before open (code=${event.code}). Check the URL and your API key.`,
+        `websocket closed before open (code=${code}). Check the URL and your API key.`,
         EXIT.NETWORK,
       );
     }
     process.exit(EXIT.SUCCESS);
-  });
+  };
 
   process.on('SIGINT', closeSocket);
   process.on('SIGTERM', closeSocket);
+
+  // Not awaited: the command runs until the socket closes. A connection that
+  // fails is reported by onError or onClose; the promise also rejects when no
+  // socket could be created, or when Ctrl-C came before one was.
+  ws.connect({ onOpen, onMessage, onClose, onError }).catch((error: unknown) => {
+    if (closing) process.exit(EXIT.SUCCESS);
+    exitError(`websocket error: ${error instanceof Error ? error.message : String(error)}`, EXIT.NETWORK);
+  });
 }
 
 // The dedicated verbs check the channel they resolve to against the SDK's
@@ -376,19 +370,19 @@ async function streamChannel(
 
 export async function streamLiquidationsCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('liquidations', options.exchange);
-  requireLiveVerbChannel(channel);
+  requireLiveChannel(channel);
   return streamChannel(channel, symbol, options);
 }
 
 export async function streamTradesCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('trades', options.exchange);
-  requireLiveVerbChannel(channel);
+  requireLiveChannel(channel);
   return streamChannel(channel, symbol, options);
 }
 
 export async function streamOrderbookCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('orderbook', options.exchange);
-  requireLiveVerbChannel(channel);
+  requireLiveChannel(channel);
   return streamChannel(channel, symbol, options);
 }
 
