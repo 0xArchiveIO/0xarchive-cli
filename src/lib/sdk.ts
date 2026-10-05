@@ -184,10 +184,16 @@ export function getCapabilities(client: OxArchive): () => Promise<CapabilityRow[
  * allows, so the CLI keeps no channel list of its own.
  */
 export function wsChannelCapabilities(): Readonly<Record<string, WsChannelCapability>> {
+  const table = installedWsChannelCapabilities();
+  if (!table) sdkTooOld('the WebSocket channel table');
+  return table;
+}
+
+/** The SDK's channel table, or undefined on an SDK release older than the floor. */
+export function installedWsChannelCapabilities(): Readonly<Record<string, WsChannelCapability>> | undefined {
   const table = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, WsChannelCapability> })
     .WS_CHANNEL_CAPABILITIES;
-  if (!table || typeof table !== 'object') sdkTooOld('the WebSocket channel table');
-  return table;
+  return table && typeof table === 'object' ? table : undefined;
 }
 
 function venueClient(client: OxArchive, venue: HyperliquidVenue): unknown {

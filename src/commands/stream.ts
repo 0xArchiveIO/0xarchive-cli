@@ -16,7 +16,7 @@ import {
 } from '../lib/output.js';
 import { exitWsError } from '../lib/errors.js';
 import { API_VERSION } from '../lib/http.js';
-import { wsChannelCapabilities } from '../lib/sdk.js';
+import { installedWsChannelCapabilities, wsChannelCapabilities, type WsChannelCapability } from '../lib/sdk.js';
 
 const DEFAULT_WS_URL = 'wss://api.0xarchive.io/ws';
 
@@ -47,18 +47,73 @@ type Channel =
   | 'spot_orderbook';
 
 /**
- * Where the history of a replay-only channel is served. Hints only: which
+ * Where the data of a replay-only channel is served. Hints only: which
  * channels stream live is the SDK's channel table (WS_CHANNEL_CAPABILITIES),
  * which mirrors `/v1/capabilities`.
  */
 export const REPLAY_ONLY_HINTS: Readonly<Record<string, string>> = {
   candles: 'Use `oxa candles history --exchange hyperliquid` or `oxa stream replay candles <symbol>`.',
   hip3_candles: 'Use `oxa candles history --exchange hip3` or `oxa stream replay hip3_candles <symbol>`.',
+  hip4_orderbook:
+    'Use `oxa orderbook get --exchange hip4 --symbol <coin>` for the current book or ' +
+    '`oxa stream replay hip4_orderbook <coin>` for stored books.',
+  hip4_open_interest:
+    'Use `oxa oi current --exchange hip4 --symbol <coin>` for current open interest or ' +
+    '`oxa stream replay hip4_open_interest <coin>` for stored values.',
   lighter_candles: 'Use `oxa candles history --exchange lighter` for candle history.',
   lighter_l3_orderbook:
     'Use `oxa lighter l3 get` for the current L3 book or `oxa lighter l3 history` for stored snapshots.',
   rh_lighter_candles: 'Use `oxa candles history --exchange rh-lighter` for candle history.',
 };
+
+/**
+ * Where the data of a channel that neither streams nor replays is served.
+ * The SDK's channel table lists it with neither mode.
+ */
+export const REST_ONLY_HINTS: Readonly<Record<string, string>> = {
+  spot_twap: 'Use `oxa spot twap history <symbol> --start ... --end ...` for Spot TWAP statuses.',
+};
+
+/**
+ * Exit with a validation error unless the SDK's channel table marks the
+ * channel live. Unknown channels list the live ones.
+ */
+export function requireLiveChannel(channel: string): void {
+  const table = wsChannelCapabilities();
+  const capability = Object.hasOwn(table, channel) ? table[channel] : undefined;
+  if (!capability) {
+    exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
+  }
+  refuseUnlessLive(channel, capability);
+}
+
+/**
+ * The same check for the channel a dedicated verb resolved to. On an SDK
+ * release older than the floor, which has no channel table, the verb streams
+ * as before.
+ */
+function requireLiveVerbChannel(channel: string): void {
+  const table = installedWsChannelCapabilities();
+  if (table && Object.hasOwn(table, channel)) refuseUnlessLive(channel, table[channel]);
+}
+
+function refuseUnlessLive(channel: string, capability: WsChannelCapability): void {
+  if (capability.live) return;
+  if (!capability.replay) {
+    const hint = Object.hasOwn(REST_ONLY_HINTS, channel) ? ` ${REST_ONLY_HINTS[channel]}` : '';
+    exitError(
+      `${channel} is served over REST only; the API neither streams nor replays it.${hint}`,
+      EXIT.VALIDATION,
+    );
+  }
+  const hint = Object.hasOwn(REPLAY_ONLY_HINTS, channel)
+    ? ` ${REPLAY_ONLY_HINTS[channel]}`
+    : ` Use \`oxa stream replay ${channel} <symbol> --start ... --end ...\` for stored data.`;
+  exitError(
+    `${channel} supports historical replay only; live subscriptions are not available on this channel.${hint}`,
+    EXIT.VALIDATION,
+  );
+}
 
 /** The channels the SDK's table marks as live, sorted. */
 export function liveChannels(): string[] {
@@ -315,16 +370,26 @@ async function streamChannel(
   process.on('SIGTERM', closeSocket);
 }
 
+// The dedicated verbs check the channel they resolve to against the SDK's
+// table too, so `oxa stream orderbook --exchange hip4` is refused with a hint
+// rather than waiting on a channel that does not stream.
+
 export async function streamLiquidationsCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel(resolveChannel('liquidations', options.exchange), symbol, options);
+  const channel = resolveChannel('liquidations', options.exchange);
+  requireLiveVerbChannel(channel);
+  return streamChannel(channel, symbol, options);
 }
 
 export async function streamTradesCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel(resolveChannel('trades', options.exchange), symbol, options);
+  const channel = resolveChannel('trades', options.exchange);
+  requireLiveVerbChannel(channel);
+  return streamChannel(channel, symbol, options);
 }
 
 export async function streamOrderbookCommand(symbol: string, options: StreamOptions): Promise<void> {
-  return streamChannel(resolveChannel('orderbook', options.exchange), symbol, options);
+  const channel = resolveChannel('orderbook', options.exchange);
+  requireLiveVerbChannel(channel);
+  return streamChannel(channel, symbol, options);
 }
 
 export async function streamGenericCommand(
@@ -333,19 +398,9 @@ export async function streamGenericCommand(
   options: StreamOptions,
 ): Promise<void> {
   const ch = String(channel).toLowerCase();
-  const table = wsChannelCapabilities();
-  const capability = Object.hasOwn(table, ch) ? table[ch] : undefined;
-  if (!capability) {
+  if (!Object.hasOwn(wsChannelCapabilities(), ch)) {
     exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
   }
-  if (!capability.live) {
-    const hint = Object.hasOwn(REPLAY_ONLY_HINTS, ch)
-      ? ` ${REPLAY_ONLY_HINTS[ch]}`
-      : ` Use \`oxa stream replay ${ch} <symbol> --start ... --end ...\` for stored data.`;
-    exitError(
-      `${ch} supports historical replay only; live subscriptions are not available on this channel.${hint}`,
-      EXIT.VALIDATION,
-    );
-  }
+  requireLiveChannel(ch);
   return streamChannel(ch, symbol, options);
 }

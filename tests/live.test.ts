@@ -21,6 +21,16 @@ function recentWindow(): [string, string] {
   return [new Date(end - 10 * 60_000).toISOString(), new Date(end).toISOString()];
 }
 
+/**
+ * `hours` long, ending `endHoursAgo` before now, as ISO strings. Wide enough
+ * that a quiet market or a short gap in capture still leaves rows in it; the
+ * commands return the oldest `--limit` rows of the window.
+ */
+function wideWindow(hours: number, endHoursAgo = 1): [string, string] {
+  const end = Math.floor((Date.now() - endHoursAgo * HOUR) / 60_000) * 60_000;
+  return [new Date(end - hours * HOUR).toISOString(), new Date(end).toISOString()];
+}
+
 async function sides(...args: string[]): Promise<Set<string>> {
   expect(await runCli(...args, '--limit', '50')).toBe(0);
   const rows = stdoutJson().data as Array<{ side: string }>;
@@ -43,14 +53,20 @@ describe.skipIf(!liveKey)('live API contract', () => {
     const rows = stdoutJson() as Array<{ venue: string; datatype: string; wsChannels: string[]; live: boolean; replay: boolean }>;
     expect(rows.find((r) => r.venue === 'hip3' && r.datatype === 'l4_diffs')).toMatchObject({ replay: true });
     if (CHANNEL_TABLE) {
+      const listed = new Set<string>();
       for (const row of rows) {
         for (const channel of row.wsChannels) {
+          listed.add(channel);
           expect({ channel, live: CHANNEL_TABLE[channel]?.live, replay: CHANNEL_TABLE[channel]?.replay }).toEqual({
             channel,
             live: row.live,
             replay: row.replay,
           });
         }
+      }
+      // A channel no row lists (spot_twap) neither streams nor replays.
+      for (const [channel, capability] of Object.entries(CHANNEL_TABLE)) {
+        if (!listed.has(channel)) expect({ channel, ...capability }).toMatchObject({ channel, live: false, replay: false });
       }
     }
   }, 30_000);
@@ -82,12 +98,16 @@ describe.skipIf(!liveKey)('live API contract', () => {
     expect(second.data[0]).not.toEqual(first.data[0]);
   }, 30_000);
 
+  // Lighter venues serve reconciled trades only, about a day behind, so their
+  // window ends two days ago.
   it.each([
-    ['hyperliquid', 'BTC'],
-    ['hip3', 'xyz:TSLA'],
-    ['spot', 'HYPE-USDC'],
-  ])('filters %s trade history by --side', async (exchange, symbol) => {
-    const [start, end] = recentWindow();
+    ['hyperliquid', 'BTC', recentWindow],
+    ['hip3', 'xyz:TSLA', recentWindow],
+    ['spot', 'HYPE-USDC', () => wideWindow(24)],
+    ['lighter', 'BTC', () => wideWindow(6, 48)],
+    ['rh-lighter', 'BTC', () => wideWindow(6, 48)],
+  ])('filters %s trade history by --side', async (exchange, symbol, window) => {
+    const [start, end] = window();
     const range = ['--start', start, '--end', end];
     expect(await sides('trades', 'history', '--exchange', exchange, '--symbol', symbol, ...range, '--side', 'buy')).toEqual(new Set(['B']));
     vi.mocked(process.stdout.write).mockClear();
@@ -97,17 +117,6 @@ describe.skipIf(!liveKey)('live API contract', () => {
   it('filters recent trades by --side (HIP-3)', async () => {
     const seen = await sides('trades', 'history', '--exchange', 'hip3', '--symbol', 'xyz:TSLA', '--side', 'sell');
     expect([...seen].every((side) => side === 'A')).toBe(true);
-  }, 30_000);
-
-  // Expected to fail: the API does not apply `side` on Lighter and Lighter on
-  // Robinhood Chain trades yet and answers 500 (internal_error). The CLI keeps
-  // --side on these venues; turn these back into plain `it` once the API
-  // filters them (vitest then reports these as unexpectedly passing).
-  it.fails.each(['lighter', 'rh-lighter'])('filters %s trade history by --side', async (exchange) => {
-    const end = Date.now() - 2 * 24 * HOUR;
-    const range = ['--start', new Date(end - HOUR).toISOString(), '--end', new Date(end).toISOString()];
-    const seen = await sides('trades', 'history', '--exchange', exchange, '--symbol', 'BTC', ...range, '--side', 'buy');
-    expect([...seen].every((side) => side === 'B')).toBe(true);
   }, 30_000);
 
   it('keeps only trigger events with --triggered true', async () => {
@@ -124,12 +133,12 @@ describe.skipIf(!liveKey)('live API contract', () => {
   }, 30_000);
 
   it.each([
-    ['l2', 'hyperliquid', 'BTC'],
-    ['l2', 'hip3', 'xyz:TSLA'],
-    ['orderbook', 'hip3', 'xyz:TSLA'],
-    ['orderbook', 'spot', 'HYPE-USDC'],
-  ])('caps %s history on %s with --depth', async (group, exchange, symbol) => {
-    const [start, end] = recentWindow();
+    ['l2', 'hyperliquid', 'BTC', recentWindow],
+    ['l2', 'hip3', 'xyz:TSLA', recentWindow],
+    ['orderbook', 'hip3', 'xyz:TSLA', recentWindow],
+    ['orderbook', 'spot', 'HYPE-USDC', () => wideWindow(24)],
+  ])('caps %s history on %s with --depth', async (group, exchange, symbol, window) => {
+    const [start, end] = window();
     expect(
       await runCli(group, 'history', '--exchange', exchange, '--symbol', symbol, '--start', start, '--end', end, '--limit', '2', '--depth', '3'),
     ).toBe(0);

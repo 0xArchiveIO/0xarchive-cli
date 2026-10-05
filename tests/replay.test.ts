@@ -203,7 +203,19 @@ describe.runIf(CHANNEL_TABLE)('oxa stream replay', () => {
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 
-  it('refuses exactly the channels the SDK table marks live-only', async () => {
+  it('refuses spot_twap, which is served over REST only, before opening a socket', async () => {
+    expect(await runCli('stream', 'replay', 'spot_twap', 'HYPE-USDC', '--start', START, '--end', END)).toBe(2);
+    expect(lastError()).toEqual({
+      error:
+        'spot_twap is served over REST only; the API neither streams nor replays it. ' +
+        'Use `oxa spot twap history <symbol> --start ... --end ...` for Spot TWAP history.',
+      code: 2,
+      type: 'validation',
+    });
+    expect(FakeSdkSocket.instances).toHaveLength(0);
+  });
+
+  it('refuses exactly the channels the SDK table does not mark replayable', async () => {
     const liveOnly = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.replay).map(([channel]) => channel);
     expect(liveOnly.sort()).toEqual(['all_tickers', 'spot_orderbook', 'spot_trades', 'spot_twap', 'ticker']);
     for (const channel of liveOnly) {

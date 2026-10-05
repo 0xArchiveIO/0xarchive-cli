@@ -1164,9 +1164,10 @@ stream
 stream
   .command('orderbook <symbol>')
   .description(
-    'Stream realtime L2 orderbook updates for a symbol. Lighter (both deployments) sends a full top-20 book, at most one per second by default.',
+    'Stream realtime L2 orderbook updates for a symbol. Lighter (both deployments) sends a full top-20 book, at most one per second by default. ' +
+      'HIP-4 books replay only: use `oxa stream replay hip4_orderbook <coin>`, or `oxa orderbook get --exchange hip4` for the current book.',
   )
-  .option('--exchange <exchange>', 'hyperliquid (default), hip3, hip4, spot, lighter, or rh-lighter')
+  .option('--exchange <exchange>', 'hyperliquid (default), hip3, spot, lighter, or rh-lighter')
   .option(
     '--interval-ms <ms>',
     'Lighter and rh-lighter only: milliseconds between books, 100 to 5000 (default 1000). Each book is the newest full state.',
@@ -1184,10 +1185,11 @@ stream
   .command('subscribe <channel> <symbol>')
   .description(
     'Subscribe to a live WebSocket channel by name: every channel `oxa capabilities` lists as live, ' +
-      'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_orderbook, spot_twap, lighter_funding, rh_lighter_trades. ' +
+      'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_trades, spot_l4_diffs, lighter_funding, rh_lighter_trades. ' +
       'Symbols are dashed canonical for spot (HYPE-USDC); HIP-4 coins are bare numerics. ' +
       'Full-depth books (orderbook_full, hip3_orderbook_full) send an l4_snapshot with every level, then l4_batch changes. ' +
-      'Replay-only channels (candles, hip3_candles, lighter_candles, lighter_l3_orderbook, rh_lighter_candles) are refused.',
+      'Replay-only channels (candles, hip3_candles, hip4_orderbook, hip4_open_interest, lighter_candles, ' +
+      'lighter_l3_orderbook, rh_lighter_candles) and spot_twap, which is served over REST only, are refused.',
   )
   .option(
     '--interval-ms <ms>',
@@ -1205,7 +1207,8 @@ stream
     'Replay stored data over WebSocket, as NDJSON, until the replay completes: every channel `oxa capabilities` lists with replay. ' +
       'Timed channels keep their original timing (scaled by --speed). L4 channels on every venue and the full-depth books ' +
       '(orderbook_full, hip3_orderbook_full) replay in bulk: an l4_snapshot, then l4_batch pages, with --speed ignored. ' +
-      'Live-only channels (ticker, all_tickers, spot_orderbook, spot_trades, spot_twap) are refused before connecting.',
+      'Live-only channels (ticker, all_tickers, spot_orderbook, spot_trades) and spot_twap, which is served over REST only, ' +
+      'are refused before connecting.',
   )
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')
   .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms)')

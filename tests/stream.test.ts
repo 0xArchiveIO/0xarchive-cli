@@ -2,6 +2,7 @@ import * as sdk from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   REPLAY_ONLY_HINTS,
+  REST_ONLY_HINTS,
   buildSubscribeMessage,
   isLighterDropNotice,
   parseIntervalMs,
@@ -378,15 +379,9 @@ describe('oxa stream over a WebSocket', () => {
     });
   });
 
-  it('subscribes to the live HIP-4 book and trades from the dedicated verbs', async () => {
-    await streamOrderbookCommand('42', { exchange: 'hip4', format: 'json' });
-    let ws = FakeWebSocket.instances[0];
-    ws.fire('open');
-    expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_orderbook', symbol: '#42' });
-
-    FakeWebSocket.instances = [];
+  it('subscribes to live HIP-4 trades from the dedicated verb', async () => {
     await streamTradesCommand('42', { exchange: 'hip4', format: 'json' });
-    ws = FakeWebSocket.instances[0];
+    const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel: 'hip4_trades', symbol: '#42' });
   });
@@ -594,16 +589,32 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
     },
   );
 
-  it('refuses exactly the channels the SDK table marks replay-only', () => {
-    const replayOnly = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.live).map(([channel]) => channel);
+  it('refuses exactly the channels the SDK table marks replay-only or REST-only', () => {
+    const notLive = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.live);
+    const replayOnly = notLive.filter(([, c]) => c.replay).map(([channel]) => channel);
+    const restOnly = notLive.filter(([, c]) => !c.replay).map(([channel]) => channel);
     expect(replayOnly.sort()).toEqual(Object.keys(REPLAY_ONLY_HINTS).sort());
+    expect(restOnly.sort()).toEqual(Object.keys(REST_ONLY_HINTS).sort());
+  });
+
+  it('refuses spot_twap, which is served over REST only, before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamGenericCommand('spot_twap', 'HYPE-USDC', { format: 'json' }),
+      'spot_twap is served over REST only; the API neither streams nor replays it. ' + REST_ONLY_HINTS.spot_twap,
+    );
+  });
+
+  it('refuses the replay-only HIP-4 book from the dedicated verb before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamOrderbookCommand('42', { exchange: 'hip4', format: 'json' }),
+      'hip4_orderbook supports historical replay only; live subscriptions are not available on this channel. ' +
+        REPLAY_ONLY_HINTS.hip4_orderbook,
+    );
   });
 
   it.each([
-    ['hip4_orderbook', '0', '#0'],
-    ['hip4_open_interest', '42', '#42'],
+    ['spot_orderbook', 'HYPE-USDC', 'HYPE-USDC'],
     ['spot_l4_orders', 'HYPE-USDC', 'HYPE-USDC'],
-    ['spot_twap', 'HYPE-USDC', 'HYPE-USDC'],
     ['hip3_l4_orders', 'xyz:TSLA', 'xyz:TSLA'],
     ['all_tickers', 'BTC', 'BTC'],
   ])('subscribes to the live channel %s the table allows', async (channel, symbol, sent) => {

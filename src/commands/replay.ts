@@ -3,10 +3,10 @@
 // stdout as one JSON record per line (NDJSON) until the replay completes.
 //
 // Which channels replay is the SDK's channel table (WS_CHANNEL_CAPABILITIES),
-// which mirrors `/v1/capabilities`. A channel it marks live-only is refused
-// before a socket is opened. Bulk channels (every L4 channel and the
-// full-depth books) replay as an `l4_snapshot` followed by `l4_batch` pages;
-// they ignore `--speed`.
+// which mirrors `/v1/capabilities`. A channel it does not mark replayable
+// (live-only, or served over REST only) is refused before a socket is
+// opened. Bulk channels (every L4 channel and the full-depth books) replay as
+// an `l4_snapshot` followed by `l4_batch` pages; they ignore `--speed`.
 
 import { OxArchiveWs } from '@0xarchive/sdk';
 import { resolveApiKey } from '../lib/client.js';
@@ -19,8 +19,8 @@ import { wsSymbol } from './stream.js';
 const DEFAULT_WS_URL = 'wss://api.0xarchive.io/ws';
 
 /**
- * Where the history of a live-only channel is served instead. Hints only: the
- * decision to refuse comes from the SDK's channel table.
+ * Where the history of a channel that does not replay is served instead.
+ * Hints only: the decision to refuse comes from the SDK's channel table.
  */
 export const LIVE_ONLY_HINTS: Readonly<Record<string, string>> = {
   spot_orderbook: 'Use `oxa orderbook history --exchange spot` for stored Spot books.',
@@ -67,21 +67,6 @@ function parseSpeed(raw: string | undefined): number | undefined {
   return n;
 }
 
-/**
- * Run the SDK's replay validation without a connection. The client is not
- * connected, so a request that passes validation is not sent anywhere; a
- * refused channel throws the SDK's error.
- */
-export function sdkReplayRefusal(channel: string, symbol: string, request: ReplayRequest): string | undefined {
-  const probe = new OxArchiveWs({ apiKey: 'validation-only', autoReconnect: false });
-  try {
-    (probe.replay as (channel: string, symbol: string, options: ReplayRequest) => void)(channel, symbol, request);
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error);
-  }
-  return undefined;
-}
-
 function prettyLine(channel: string, message: any): string {
   const type = String(message?.type ?? 'message');
   const time = message?.timestamp ?? '';
@@ -123,7 +108,10 @@ export async function streamReplayCommand(channel: string, symbol: string, optio
   }
   const hint = Object.hasOwn(LIVE_ONLY_HINTS, ch) ? ` ${LIVE_ONLY_HINTS[ch]}` : '';
   if (!capability.replay) {
-    exitError(`${ch} is live only; the API does not replay it.${hint}`, EXIT.VALIDATION);
+    const reason = capability.live
+      ? 'is live only; the API does not replay it'
+      : 'is served over REST only; the API neither streams nor replays it';
+    exitError(`${ch} ${reason}.${hint}`, EXIT.VALIDATION);
   }
   const apiKey = resolveApiKey(options.apiKey);
 
@@ -136,10 +124,6 @@ export async function streamReplayCommand(channel: string, symbol: string, optio
   }
 
   const request: ReplayRequest = { start, end, ...(speed !== undefined ? { speed } : {}), ...(interval ? { interval } : {}) };
-  const refusal = sdkReplayRefusal(ch, symbol, request);
-  if (refusal !== undefined) {
-    exitError(`${refusal}${hint}`, EXIT.VALIDATION);
-  }
 
   // The SDK connects with the API version (`version=`) it parses.
   const ws = new OxArchiveWs({
@@ -202,5 +186,12 @@ export async function streamReplayCommand(channel: string, symbol: string, optio
     const speedNote = capability.bulkReplay ? ' bulk (speed ignored)' : speed !== undefined ? ` speed=${speed}` : '';
     prettyDim(`replay: channel=${ch} symbol=${symbol} start=${start} end=${end}${speedNote}`);
   }
-  (ws.replay as (channel: string, symbol: string, options: ReplayRequest) => void)(ch, symbol, request);
+  try {
+    // The SDK checks the request against the same channel table before it
+    // sends; a refusal here ends the run like the checks above.
+    (ws.replay as (channel: string, symbol: string, options: ReplayRequest) => void)(ch, symbol, request);
+  } catch (error) {
+    finished = true;
+    exitError(`${error instanceof Error ? error.message : String(error)}${hint}`, EXIT.VALIDATION);
+  }
 }
