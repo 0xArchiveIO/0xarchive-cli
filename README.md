@@ -131,7 +131,7 @@ Which venue serves which datatype, over REST and WebSocket, and from when, is `o
 
 ## Plans and Data Access
 
-Every command below works on every plan, including Free. Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. Plans gate capacity and Free's 30-day history window, not route families, schemas, or served depth. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
+Every command below works on every plan, including Free, except the live `mempool` stream (`oxa stream subscribe mempool`), which is included with the Pro, Scale, and Enterprise plans. Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. Plans gate capacity and Free's 30-day history window, not route families, schemas, or served depth. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
 
 ## Commands
 
@@ -981,7 +981,7 @@ oxa stream trades HYPE-USDC --exchange spot --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`. Live streams and replays run on the SDK's WebSocket client, which connects with the `ws` package in Node.js. They work on Node.js 18 or later, and large messages, such as the L4 snapshot of a deep book, arrive intact.
+Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free; the `mempool` channel is included with the Pro, Scale, and Enterprise plans. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`, and `mempool` connects to `wss://stream.0xarchive.io/ws`, the only endpoint that serves it. Live streams and replays run on the SDK's WebSocket client, which connects with the `ws` package in Node.js. They work on Node.js 18 or later, and large messages, such as the L4 snapshot of a deep book, arrive intact.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
@@ -1016,6 +1016,10 @@ oxa stream subscribe hip3_orderbook_full xyz:SP500
 oxa stream subscribe hip4_trades "$COIN"
 oxa stream subscribe hip4_l4_diffs "$COIN"
 
+# Pending Hyperliquid transactions, before they are in a block (Pro, Scale, and Enterprise plans)
+oxa stream subscribe mempool BTC --duration-ms 10000
+oxa stream subscribe mempool --duration-ms 10000   # every pending transaction
+
 # Replay ten minutes of stored trades at 10x real time (one minute), then exit
 oxa stream replay trades BTC --start $HOUR_AGO --end $(( HOUR_AGO + 600000 )) --speed 10
 
@@ -1033,7 +1037,7 @@ oxa stream replay hip3_l4_diffs xyz:TSLA --start $HOUR_AGO --end $(( HOUR_AGO + 
 | `--url` | All | Override the WebSocket URL (or set `OXA_WS_URL`) |
 | `--format` | All | `json` (NDJSON, default) or `pretty` |
 
-`oxa stream subscribe` accepts every channel that `oxa capabilities` lists as live. The CLI reads that list from the SDK's channel table, which mirrors `/v1/capabilities`: `orderbook`, `trades`, `liquidations`, `open_interest`, `funding`, `ticker`, `all_tickers`, `l4_diffs`, `l4_orders`, `orderbook_full` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip3_orderbook_full` (HIP-3); `hip4_trades`, `hip4_l4_diffs`, `hip4_l4_orders` (HIP-4); `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders` (Spot); and the four live channels of each Lighter deployment. The replay-only channels (`candles`, `hip3_candles`, `hip4_orderbook`, `hip4_open_interest`, `lighter_candles`, `lighter_l3_orderbook`, `rh_lighter_candles`) are refused before a socket opens, with a pointer to the command that serves their data, and so is `spot_twap`, whose TWAP statuses are served over REST only (`oxa spot twap history`).
+`oxa stream subscribe` accepts every channel that `oxa capabilities` lists as live. The CLI reads that list from the SDK's channel table, which mirrors `/v1/capabilities`: `orderbook`, `trades`, `liquidations`, `open_interest`, `funding`, `ticker`, `all_tickers`, `l4_diffs`, `l4_orders`, `orderbook_full` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip3_orderbook_full` (HIP-3); `hip4_trades`, `hip4_l4_diffs`, `hip4_l4_orders` (HIP-4); `spot_orderbook`, `spot_trades`, `spot_l4_diffs`, `spot_l4_orders` (Spot); the four live channels of each Lighter deployment; and `mempool` (pending transactions on every Hyperliquid product, see [Pending transactions (mempool)](#pending-transactions-mempool)). Every channel needs a symbol except `mempool`, where it is optional. The replay-only channels (`candles`, `hip3_candles`, `hip4_orderbook`, `hip4_open_interest`, `lighter_candles`, `lighter_l3_orderbook`, `rh_lighter_candles`) are refused before a socket opens, with a pointer to the command that serves their data, and so is `spot_twap`, whose TWAP statuses are served over REST only (`oxa spot twap history`).
 
 Each `liquidations` / `hip3_liquidations` event is delivered as a fill row with `is_liquidation: true`. To stop early, send SIGINT (Ctrl-C) or pass `--duration-ms`; both exit with code 0. An error message from the server is written to stderr with its `error_code`, and the CLI exits with the code for that class (see [Exit Codes](#exit-codes)): an unknown symbol (`invalid_symbol`) exits with code 2, and a connection that fell behind (`slow_consumer`) exits with code 4, so a supervising script can restart the stream. The one exception is a Lighter drop notice, which the CLI reports as a warning while the stream continues (see [Lighter live channels](#lighter-live-channels)). Every connection selects API version `2026-10-01` (`version=2026-10-01` on the URL).
 
@@ -1076,6 +1080,38 @@ WebSocket replay of all six Lighter mainnet channels, and of the five Robinhood 
 
 HIP-4 streams live on `hip4_trades`, `hip4_l4_diffs`, and `hip4_l4_orders`. `hip4_orderbook` and `hip4_open_interest` replay stored data but do not stream live, so `oxa stream subscribe` refuses them; read the current book and open interest with `oxa hip4 orderbook get` and `oxa hip4 oi current`. Pass HIP-4 coins as bare numerics (`82260`); the CLI sends them to the WebSocket API in its `#82260` form. `hip4_l4_diffs` starts with an L4 snapshot of the book.
 
+#### Pending transactions (mempool)
+
+`mempool` streams signed Hyperliquid transactions (orders, cancels, modifies, TWAPs, leverage changes, transfers, and every other action type) as our Hyperliquid node receives them from its peers, before they are included in a block. It covers every Hyperliquid product: perps, HIP-3, HIP-4, and spot.
+
+- Live only: there is no replay, no history, and no REST route. Pending transactions are not stored, and `oxa stream replay mempool` is refused before connecting.
+- Pending is not executed: a transaction seen here can still be rejected, expire, or never land.
+- The same signed action can occasionally arrive twice; deduplicate on `signature` if needed.
+- Served on `wss://stream.0xarchive.io/ws` only, with the same API key. The CLI connects there unless `--url` or `OXA_WS_URL` is set; pointing either at `wss://api.0xarchive.io/ws` exits with code 2 before connecting.
+- Included with the Pro, Scale, and Enterprise plans. On other plans the server answers `forbidden`, and the CLI exits with code 3. Each message counts like any other WebSocket message.
+
+```bash
+oxa stream subscribe mempool BTC          # actions that reference BTC
+oxa stream subscribe mempool xyz:TSLA     # HIP-3
+oxa stream subscribe mempool HYPE-USDC    # spot
+oxa stream subscribe mempool "$COIN"      # HIP-4, bare numeric coin
+oxa stream subscribe mempool              # every pending transaction
+```
+
+Leave the symbol out for every pending transaction. The unfiltered stream is several megabytes per second before compression, and the number of unfiltered subscriptions is limited: when it is at capacity, the server answers `rate_limited` and the CLI exits with code 4; subscribe with a symbol, or try again later. A symbol subscription receives every action whose asset ids include that market, whole, so an order batch touching BTC and ETH reaches both BTC and ETH subscribers. An unknown symbol gets `invalid_symbol` (exit code 2).
+
+Each NDJSON line is one message, holding the signed actions of one batch our node received from a peer. `coin` and `symbol` are the subscription's symbol, or `null` on the unfiltered stream. Example message (one item, signature shortened):
+
+```json
+{"type":"data","channel":"mempool","coin":"BTC","symbol":"BTC","data":[{"received_at":"2026-10-08T01:57:23.548737209Z","received_at_ms":1791424643548,"symbols":["BTC"],"action":{"type":"order","orders":[{"a":0,"b":true,"p":"83276","s":"0.40011","r":false,"t":{"limit":{"tif":"Alo"}},"c":"0x7849acc2c6c2f6f0fe4bc80ef13d1504"}],"grouping":"na"},"nonce":1791424643400,"vault_address":null,"expires_after_ms":null,"signature":{"r":"0x5afc...","s":"0x57e2...","v":28}}]}
+```
+
+- **`received_at`**, **`received_at_ms`**: when our node received the transaction, as RFC 3339 UTC with nanosecond precision and as Unix milliseconds. Not a block time.
+- **`symbols`**: the markets the action's asset ids reference, in canonical spelling and first-seen order, without repeats. Empty for actions with no market, such as transfers.
+- **`action`**: the action exactly as signed, in Hyperliquid's exchange-action format: asset ids (`a`, `asset`), not symbols, and prices and sizes as strings. `action.type` names it (`order`, `cancel`, `modify`, `twapOrder`, `updateLeverage`, `usdSend`, and others); Hyperliquid adds types over time.
+- **`nonce`**: the action's nonce. **`vault_address`**: the vault or subaccount it acts for, or `null`. **`expires_after_ms`**: the action's `expiresAfter` in Unix milliseconds, or `null`.
+- **`signature`**: `{r, s, v}`. The signer can be recovered from it and `action`; the signer's address is not included.
+
 #### Replay
 
 `oxa stream replay <channel> <symbol> --start <time> --end <time>` replays stored data over one WebSocket connection through the SDK's replay client. Every server message (`replay_started`, the `historical_data` rows, `l4_snapshot` and `l4_batch` pages on the bulk channels, `gap_detected`, and `replay_completed`) is written to stdout as one JSON record per line, and the command exits with code 0 when the replay completes. A server error is written to stderr with its `error_code` and exits with the code for its class (see [Exit Codes](#exit-codes)). In pretty format, bulk pages are summarized (`l4_batch 5000 events`, `l4_snapshot block=... bids=... asks=...`) rather than printed.
@@ -1098,7 +1134,7 @@ oxa stream replay lighter_orderbook ETH --start $HOUR_AGO --end $(( HOUR_AGO + 6
 | `--url` | No | Override the WebSocket URL (or set `OXA_WS_URL`) |
 | `--format` | No | `json` (NDJSON, default) or `pretty` |
 
-Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
+Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`, `mempool`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history where there is one. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
 
 ### `oxa webhooks ...`
 

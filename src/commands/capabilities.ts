@@ -51,6 +51,10 @@ function printRow(row: CapabilityRow): void {
   prettyField('Cadence', row.cadence);
   prettyField('Page limit', row.pageLimit ?? '-');
   prettyField('Intervals', list(row.intervals));
+  // Set only on rows served on one WebSocket endpoint, or included with some
+  // plans rather than all (the mempool row).
+  if (row.wsEndpoint) prettyField('WebSocket endpoint', row.wsEndpoint);
+  if (row.plans) prettyField('Plans', list(row.plans));
   prettyField('Notes', row.notes);
 }
 

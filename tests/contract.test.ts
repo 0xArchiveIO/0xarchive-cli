@@ -314,6 +314,38 @@ describe('API contract 2026-10-01 in the CLI', () => {
       expect(out).toContain('Notes: WebSocket replay is bulk');
     });
 
+    it('prints the WebSocket endpoint and plans of a row that sets them', async () => {
+      const mempool = {
+        venue: 'hyperliquid',
+        datatype: 'mempool',
+        restRoutes: [],
+        wsChannels: ['mempool'],
+        live: true,
+        replay: false,
+        availableFrom: null,
+        cadence: 'event',
+        pageLimit: null,
+        intervals: [],
+        notes: 'Live only.',
+        wsEndpoint: 'wss://stream.0xarchive.io/ws',
+        plans: ['pro', 'scale', 'enterprise'],
+      };
+      sdk.state.clients.capabilities!.mockResolvedValue([...sdk.CAPABILITIES, mempool]);
+      expect(await runCli('capabilities', '--datatype', 'mempool', '--format', 'pretty')).toBe(0);
+      const out = stdoutText();
+      expect(out).toContain('WebSocket endpoint: wss://stream.0xarchive.io/ws');
+      expect(out).toContain('Plans: pro, scale, enterprise');
+
+      vi.mocked(process.stdout.write).mockClear();
+      expect(await runCli('capabilities', '--datatype', 'mempool')).toBe(0);
+      expect(stdoutJson()).toEqual([mempool]);
+
+      vi.mocked(process.stdout.write).mockClear();
+      expect(await runCli('capabilities', '--exchange', 'hip3', '--datatype', 'l4_diffs', '--format', 'pretty')).toBe(0);
+      expect(stdoutText()).not.toContain('WebSocket endpoint');
+      expect(stdoutText()).not.toContain('Plans');
+    });
+
     it('names the datatypes a venue serves when the datatype is unknown', async () => {
       expect(await runCli('capabilities', '--exchange', 'spot', '--datatype', 'funding')).toBe(2);
       expect(lastError().error).toBe('No datatype "funding". Hyperliquid Spot serves: candles or trades.');
@@ -334,7 +366,7 @@ describe('API contract 2026-10-01 in the CLI', () => {
     it('asks for the SDK floor on an SDK without capabilities()', async () => {
       sdk.state.clients.capabilities = undefined;
       expect(await runCli('capabilities')).toBe(5);
-      expect(lastError().error).toMatch(/^Support for capabilities requires @0xarchive\/sdk 1\.12\.0 or newer/);
+      expect(lastError().error).toMatch(/^Support for capabilities requires @0xarchive\/sdk 1\.13\.0 or newer/);
     });
   });
 
@@ -447,7 +479,7 @@ describe('API contract 2026-10-01 in the CLI', () => {
     it('asks for the SDK floor for --side on recent trades on an older SDK', async () => {
       delete (sdk.state.clients.lighter.trades as Record<string, unknown>).history;
       expect(await runCli('trades', 'history', '--exchange', 'lighter', '--symbol', 'BTC', '--side', 'buy')).toBe(5);
-      expect(lastError().error).toMatch(/--side on recent trades requires @0xarchive\/sdk 1\.12\.0/);
+      expect(lastError().error).toMatch(/--side on recent trades requires @0xarchive\/sdk 1\.13\.0/);
     });
 
     it('refuses a --side other than buy or sell before any request', async () => {

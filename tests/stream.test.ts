@@ -1,24 +1,35 @@
 import * as sdk from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  OPTIONAL_SYMBOL_CHANNELS,
   REPLAY_ONLY_HINTS,
   REST_ONLY_HINTS,
   isLighterDropNotice,
   parseIntervalMs,
+  requireSymbol,
   resolveChannel,
   streamGenericCommand,
   streamLiquidationsCommand,
   streamOrderbookCommand,
   streamTradesCommand,
+  streamUrl,
   wsSymbol,
 } from '../src/commands/stream.js';
+import { parseCli } from './helpers.js';
 
 // `oxa stream` runs on the SDK's WebSocket client and allows the channels the
 // SDK's channel table marks live. The SDK release the CLI requires exports
 // that table; on an older install (CI before that release reaches npm) the
 // socket tests are skipped and the commands ask for that release instead.
-const CHANNEL_TABLE = (sdk as unknown as { WS_CHANNEL_CAPABILITIES?: Record<string, { live: boolean; replay: boolean }> })
-  .WS_CHANNEL_CAPABILITIES;
+const CHANNEL_TABLE = (
+  sdk as unknown as {
+    WS_CHANNEL_CAPABILITIES?: Record<string, { live: boolean; replay: boolean; wsEndpoint?: string }>;
+  }
+).WS_CHANNEL_CAPABILITIES;
+
+// `mempool` is in the SDK's table from 1.13.0. Until that release is on npm,
+// CI runs on the newest published SDK, and the socket tests for it are skipped.
+const HAS_MEMPOOL = CHANNEL_TABLE !== undefined && Object.hasOwn(CHANNEL_TABLE, 'mempool');
 
 class ProcessExit extends Error {
   constructor(readonly code: number) {
@@ -578,7 +589,7 @@ describe.skipIf(CHANNEL_TABLE)('oxa stream on an SDK older than the floor', () =
     () => streamGenericCommand('l4_diffs', 'BTC', { format: 'json' }),
   ])('asks for the SDK release with the channel table (%#)', async (run) => {
     await expect(Promise.resolve().then(run)).rejects.toMatchObject({ code: 5 });
-    expect(stderrPayloads().at(-1)?.error).toMatch(/requires @0xarchive\/sdk 1\.12\.0 or newer/);
+    expect(stderrPayloads().at(-1)?.error).toMatch(/requires @0xarchive\/sdk 1\.13\.0 or newer/);
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 });
@@ -760,6 +771,172 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
   });
 });
 
+const MEMPOOL_ITEM = {
+  received_at: '2026-10-08T01:57:23.548737209Z',
+  received_at_ms: 1791424643548,
+  symbols: ['BTC'],
+  action: {
+    type: 'order',
+    orders: [{ a: 0, b: true, p: '83276', s: '0.40011', r: false, t: { limit: { tif: 'Alo' } }, c: '0x7849acc2c6c2f6f0fe4bc80ef13d1504' }],
+    grouping: 'na',
+  },
+  nonce: 1791424643400,
+  vault_address: null,
+  expires_after_ms: null,
+  signature: { r: '0x5afc', s: '0x57e2', v: 28 },
+};
+
+describe('stream endpoint and optional symbol', () => {
+  let savedWsUrl: string | undefined;
+
+  beforeEach(() => {
+    savedWsUrl = process.env.OXA_WS_URL;
+    delete process.env.OXA_WS_URL;
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new ProcessExit(code ?? 0);
+    }) as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    if (savedWsUrl !== undefined) process.env.OXA_WS_URL = savedWsUrl;
+  });
+
+  it('connects a channel served on one endpoint there, and every other channel to the default', () => {
+    expect(streamUrl({ wsEndpoint: 'wss://stream.0xarchive.io/ws' })).toBe('wss://stream.0xarchive.io/ws');
+    expect(streamUrl({})).toBe('wss://api.0xarchive.io/ws');
+  });
+
+  it('puts --url, then OXA_WS_URL, ahead of that endpoint', () => {
+    const capability = { wsEndpoint: 'wss://stream.0xarchive.io/ws' };
+    vi.stubEnv('OXA_WS_URL', 'wss://env.example/ws');
+    expect(streamUrl(capability)).toBe('wss://env.example/ws');
+    expect(streamUrl(capability, 'wss://flag.example/ws')).toBe('wss://flag.example/ws');
+    expect(streamUrl({}, 'wss://flag.example/ws')).toBe('wss://flag.example/ws');
+  });
+
+  it('makes the symbol optional on mempool only', () => {
+    expect(OPTIONAL_SYMBOL_CHANNELS).toEqual(['mempool']);
+    expect(() => requireSymbol('mempool', undefined)).not.toThrow();
+    expect(() => requireSymbol('trades', 'BTC')).not.toThrow();
+    for (const symbol of [undefined, '']) {
+      expect(() => requireSymbol('trades', symbol)).toThrow(ProcessExit);
+      expect(stderrPayloads().at(-1)).toEqual({
+        error: 'trades needs a symbol: `oxa stream subscribe trades <symbol>`.',
+        code: 2,
+        type: 'validation',
+      });
+    }
+  });
+});
+
+describe.runIf(HAS_MEMPOOL)('oxa stream subscribe mempool', () => {
+  let savedWsUrl: string | undefined;
+
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    // The SDK client's keep-alive ping runs on an interval; keep it off the clock.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.stubEnv('OXA_API_KEY', 'test-key');
+    savedWsUrl = process.env.OXA_WS_URL;
+    delete process.env.OXA_WS_URL;
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'on').mockImplementation(() => process);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new ProcessExit(code ?? 0);
+    }) as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    if (savedWsUrl !== undefined) process.env.OXA_WS_URL = savedWsUrl;
+  });
+
+  it('takes the stream endpoint from the SDK table', () => {
+    expect(CHANNEL_TABLE!.mempool).toMatchObject({ live: true, replay: false, wsEndpoint: 'wss://stream.0xarchive.io/ws' });
+  });
+
+  it('streams every pending transaction from the stream endpoint when the symbol is left out', async () => {
+    await parseCli('stream', 'subscribe', 'mempool');
+    const ws = FakeWebSocket.instances[0];
+    expect(ws.url).toBe('wss://stream.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
+    ws.fire('open');
+    expect(ws.frames()).toEqual([{ op: 'subscribe', channel: 'mempool' }]);
+
+    ws.message({ type: 'subscribed', channel: 'mempool', coin: null, symbol: null });
+    const frame = { type: 'data', channel: 'mempool', coin: null, symbol: null, data: [MEMPOOL_ITEM] };
+    ws.message(frame);
+    expect(stdoutLines()).toEqual([JSON.stringify(frame) + '\n']);
+  });
+
+  it('filters to one market with a symbol', async () => {
+    await parseCli('stream', 'subscribe', 'MEMPOOL', 'BTC', '--format', 'pretty');
+    const ws = FakeWebSocket.instances[0];
+    expect(ws.url).toBe('wss://stream.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
+    ws.fire('open');
+    expect(ws.frames()).toEqual([{ op: 'subscribe', channel: 'mempool', symbol: 'BTC' }]);
+    ws.message({ type: 'data', channel: 'mempool', coin: 'BTC', symbol: 'BTC', data: [MEMPOOL_ITEM] });
+    expect(stdoutLines().at(-1)).toBe(`[mempool] 1791424643548 ${JSON.stringify([MEMPOOL_ITEM])}\n`);
+  });
+
+  it('keeps --url and OXA_WS_URL ahead of the stream endpoint', async () => {
+    process.env.OXA_WS_URL = 'wss://env.example/ws';
+    await streamGenericCommand('mempool', undefined, { format: 'json' });
+    expect(FakeWebSocket.instances[0].url).toBe('wss://env.example/ws?apiKey=test-key&version=2026-10-01');
+
+    FakeWebSocket.instances = [];
+    await streamGenericCommand('mempool', 'BTC', { format: 'json', url: 'wss://proxy.example/ws' });
+    expect(FakeWebSocket.instances[0].url).toBe('wss://proxy.example/ws?apiKey=test-key&version=2026-10-01');
+  });
+
+  it('refuses mempool on the default endpoint before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamGenericCommand('mempool', undefined, { format: 'json', url: 'wss://api.0xarchive.io/ws' }),
+      'mempool is served on wss://stream.0xarchive.io/ws only. Leave out --url and OXA_WS_URL to connect there.',
+    );
+  });
+
+  it('still connects every other channel to the default endpoint', async () => {
+    await streamGenericCommand('l4_diffs', 'BTC', { format: 'json' });
+    expect(FakeWebSocket.instances[0].url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
+  });
+
+  it('refuses another channel without a symbol before opening a socket', async () => {
+    await expect(parseCli('stream', 'subscribe', 'trades')).rejects.toMatchObject({ code: 2 });
+    expect(stderrPayloads().at(-1)).toEqual({
+      error: 'trades needs a symbol: `oxa stream subscribe trades <symbol>`.',
+      code: 2,
+      type: 'validation',
+    });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it.each([
+    [
+      'forbidden',
+      'The mempool channel is included with the Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.',
+      3,
+      'auth',
+    ],
+    ['rate_limited', 'The unfiltered mempool stream is at capacity. Subscribe with a symbol, or try again later.', 4, 'network'],
+    ['upstream_unavailable', 'The mempool channel is temporarily unavailable. Please try again shortly.', 4, 'network'],
+  ])('exits on %s with the error_code', async (code, message, exit, type) => {
+    await streamGenericCommand('mempool', undefined, { format: 'json' });
+    const ws = FakeWebSocket.instances[0];
+    ws.fire('open');
+    ws.message({ type: 'error', message, error_code: code });
+    expect(exitCodes()).toEqual([exit]);
+    expect(stderrPayloads().at(-1)).toEqual({ error: `stream error: ${message}`, code: exit, type, error_code: code });
+  });
+});
+
 describe('WebSocket symbols', () => {
   it('uses the #<n> form on HIP-4 channels only', () => {
     expect(wsSymbol('hip4_l4_diffs', '42')).toBe('#42');
@@ -767,5 +944,13 @@ describe('WebSocket symbols', () => {
     expect(wsSymbol('hip4_trades', 'not-a-coin')).toBe('not-a-coin');
     expect(wsSymbol('trades', '42')).toBe('42');
     expect(wsSymbol('hip3_trades', 'km:US500')).toBe('km:US500');
+  });
+
+  it('uses the #<n> form for HIP-4 coins on mempool, and leaves other markets alone', () => {
+    expect(wsSymbol('mempool', '49720')).toBe('#49720');
+    expect(wsSymbol('mempool', '#49720')).toBe('#49720');
+    expect(wsSymbol('mempool', 'BTC')).toBe('BTC');
+    expect(wsSymbol('mempool', 'xyz:TSLA')).toBe('xyz:TSLA');
+    expect(wsSymbol('mempool', 'HYPE-USDC')).toBe('HYPE-USDC');
   });
 });

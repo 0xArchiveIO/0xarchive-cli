@@ -6,7 +6,9 @@
 // Each `oxa stream <channel> <symbol>` command opens a single subscription,
 // emits one JSON record per stdout line (NDJSON), and runs until the user
 // hits Ctrl-C. JSON mode is the default; `--format pretty` adds a one-line
-// human-readable summary per event.
+// human-readable summary per event. `mempool` is the one channel whose symbol
+// is optional, and a channel served on one endpoint only (the SDK's table
+// names it, as for `mempool`) connects there unless --url or OXA_WS_URL is set.
 
 import { OxArchiveWs } from '@0xarchive/sdk';
 import { resolveApiKey } from '../lib/client.js';
@@ -76,16 +78,47 @@ export const REST_ONLY_HINTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Exit with a validation error unless the SDK's channel table marks the
- * channel live. Unknown channels list the live ones.
+ * Channels whose symbol is optional. Without one, `mempool` streams every
+ * pending transaction; every other channel needs a symbol.
  */
-export function requireLiveChannel(channel: string): void {
+export const OPTIONAL_SYMBOL_CHANNELS: readonly string[] = ['mempool'];
+
+/** Exit with a validation error when a channel that needs a symbol has none. */
+export function requireSymbol(channel: string, symbol: string | undefined): void {
+  if ((symbol !== undefined && symbol !== '') || OPTIONAL_SYMBOL_CHANNELS.includes(channel)) return;
+  exitError(`${channel} needs a symbol: \`oxa stream subscribe ${channel} <symbol>\`.`, EXIT.VALIDATION);
+}
+
+/**
+ * The WebSocket URL for a channel: --url, then OXA_WS_URL, then the only
+ * endpoint that serves the channel when the SDK's table names one (`mempool`
+ * is served on wss://stream.0xarchive.io/ws only), then the default endpoint.
+ */
+export function streamUrl(capability: Pick<WsChannelCapability, 'wsEndpoint'>, url?: string): string {
+  return url ?? process.env.OXA_WS_URL ?? capability.wsEndpoint ?? DEFAULT_WS_URL;
+}
+
+/** True when `url` points at the default endpoint, wss://api.0xarchive.io/ws. */
+function isDefaultEndpoint(url: string): boolean {
+  try {
+    return new URL(url).host === new URL(DEFAULT_WS_URL).host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Exit with a validation error unless the SDK's channel table marks the
+ * channel live, and return its row. Unknown channels list the live ones.
+ */
+export function requireLiveChannel(channel: string): WsChannelCapability {
   const table = wsChannelCapabilities();
   const capability = Object.hasOwn(table, channel) ? table[channel] : undefined;
   if (!capability) {
     exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
   }
   refuseUnlessLive(channel, capability);
+  return capability;
 }
 
 function refuseUnlessLive(channel: string, capability: WsChannelCapability): void {
@@ -217,20 +250,23 @@ export function parseIntervalMs(raw: string | undefined, channel: string): numbe
 /**
  * HIP-4 WebSocket channels name coins in their on-chain form (`#0`). The CLI
  * takes bare numerics everywhere else, so `0` and `%230` become `#0` here.
+ * `mempool` takes HIP-4 coins in the same form; no other market it accepts is
+ * a bare number.
  */
 export function wsSymbol(channel: string, symbol: string): string {
-  if (!channel.startsWith('hip4_')) return symbol;
+  if (!channel.startsWith('hip4_') && channel !== 'mempool') return symbol;
   const trimmed = String(symbol).trim();
   const digits = trimmed.replace(/^(#|%23)/i, '');
   return /^\d+$/.test(digits) ? `#${digits}` : trimmed;
 }
 
 // Best-effort event time for the pretty summary line. Replay rows carry
-// `timestamp`; live books and fills carry `time` (fills arrive as an array).
+// `timestamp`; live books and fills carry `time` (fills arrive as an array);
+// pending transactions carry `received_at_ms`.
 function eventTime(payload: any): string | number {
   const data = payload?.data;
   const first = Array.isArray(data) ? data[0] : data;
-  return first?.timestamp ?? first?.time ?? payload?.timestamp ?? '';
+  return first?.timestamp ?? first?.time ?? first?.received_at_ms ?? payload?.timestamp ?? '';
 }
 
 /**
@@ -245,27 +281,38 @@ interface LiveClient {
     onClose?: (code: number, reason: string) => void;
     onError?: (error: Error) => void;
   }): Promise<void>;
-  subscribe(channel: string, symbol: string, options?: { intervalMs?: number }): void;
+  subscribe(channel: string, symbol?: string, options?: { intervalMs?: number }): void;
   disconnect(): void;
 }
 
 async function streamChannel(
   channel: string,
-  symbol: string,
+  symbol: string | undefined,
   options: StreamOptions,
+  capability: WsChannelCapability,
 ): Promise<void> {
   const format = validateFormat(options.format);
-  symbol = wsSymbol(channel, symbol);
+  symbol = symbol === undefined || symbol === '' ? undefined : wsSymbol(channel, symbol);
   const durationMs = parseDuration(options.durationMs);
   const intervalMs = parseIntervalMs(options.intervalMs, channel);
   const apiKey = resolveApiKey(options.apiKey);
+
+  // A channel served on one endpoint only is refused on the default endpoint,
+  // which is known not to serve it. Any other URL is left to the server.
+  const wsUrl = streamUrl(capability, options.url);
+  if (capability.wsEndpoint !== undefined && isDefaultEndpoint(wsUrl)) {
+    exitError(
+      `${channel} is served on ${capability.wsEndpoint} only. Leave out --url and OXA_WS_URL to connect there.`,
+      EXIT.VALIDATION,
+    );
+  }
 
   // The SDK adds the key and the API version (`version=`) to the URL. A
   // dropped connection ends the command rather than reconnecting, so the
   // output never joins two sessions without a sign of the gap.
   const ws = new OxArchiveWs({
     apiKey,
-    wsUrl: options.url ?? process.env.OXA_WS_URL ?? DEFAULT_WS_URL,
+    wsUrl,
     autoReconnect: false,
   }) as unknown as LiveClient;
 
@@ -297,7 +344,8 @@ async function streamChannel(
     opened = true;
     if (format === 'pretty') {
       const interval = intervalMs !== undefined ? ` interval_ms=${intervalMs}` : '';
-      prettyDim(`subscribed: channel=${channel} symbol=${symbol}${interval}`);
+      const target = symbol !== undefined ? ` symbol=${symbol}` : '';
+      prettyDim(`subscribed: channel=${channel}${target}${interval}`);
     }
     if (durationMs !== undefined) {
       timer = setTimeout(closeSocket, durationMs);
@@ -370,31 +418,31 @@ async function streamChannel(
 
 export async function streamLiquidationsCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('liquidations', options.exchange);
-  requireLiveChannel(channel);
-  return streamChannel(channel, symbol, options);
+  return streamChannel(channel, symbol, options, requireLiveChannel(channel));
 }
 
 export async function streamTradesCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('trades', options.exchange);
-  requireLiveChannel(channel);
-  return streamChannel(channel, symbol, options);
+  return streamChannel(channel, symbol, options, requireLiveChannel(channel));
 }
 
 export async function streamOrderbookCommand(symbol: string, options: StreamOptions): Promise<void> {
   const channel = resolveChannel('orderbook', options.exchange);
-  requireLiveChannel(channel);
-  return streamChannel(channel, symbol, options);
+  return streamChannel(channel, symbol, options, requireLiveChannel(channel));
 }
 
+// `oxa stream subscribe <channel> [symbol]`: the symbol is optional on
+// `mempool` only.
 export async function streamGenericCommand(
   channel: string,
-  symbol: string,
+  symbol: string | undefined,
   options: StreamOptions,
 ): Promise<void> {
   const ch = String(channel).toLowerCase();
   if (!Object.hasOwn(wsChannelCapabilities(), ch)) {
     exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
   }
-  requireLiveChannel(ch);
-  return streamChannel(ch, symbol, options);
+  const capability = requireLiveChannel(ch);
+  requireSymbol(ch, symbol);
+  return streamChannel(ch, symbol, options, capability);
 }
