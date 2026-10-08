@@ -1181,16 +1181,16 @@ stream
 // Generic channel subscription by name. Which channels stream live, and the
 // endpoint a channel served on one endpoint only connects to, is the SDK's
 // channel table (WS_CHANNEL_CAPABILITIES, which mirrors /v1/capabilities);
-// replay-only channels are refused before a socket opens. The symbol is
-// optional on `mempool` only.
+// replay-only channels are refused before a socket opens. `mempool` takes an
+// optional symbol, `all_tickers` takes none, and every other channel needs one.
 stream
   .command('subscribe <channel> [symbol]')
   .description(
     'Subscribe to a live WebSocket channel by name: every channel `oxa capabilities` lists as live, ' +
       'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_trades, spot_l4_diffs, lighter_funding, rh_lighter_trades, mempool. ' +
       'Symbols are dashed canonical for spot (HYPE-USDC); HIP-4 coins are bare numerics. ' +
-      'Every channel needs a symbol except mempool (pending Hyperliquid transactions; Pro, Scale and Enterprise plans), ' +
-      'where it is optional: without one, every pending transaction streams. ' +
+      'mempool (pending Hyperliquid transactions; Pro, Scale and Enterprise plans) takes an optional symbol: without one, ' +
+      'every pending transaction our Hyperliquid node receives streams. all_tickers takes no symbol, and every other channel needs one. ' +
       'mempool is served on wss://stream.0xarchive.io/ws only, and the CLI connects there unless --url or OXA_WS_URL is set. ' +
       'Full-depth books (orderbook_full, hip3_orderbook_full) send an l4_snapshot with every level, then l4_batch changes. ' +
       'Replay-only channels (candles, hip3_candles, hip4_orderbook, hip4_open_interest, lighter_candles, ' +

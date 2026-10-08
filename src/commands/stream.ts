@@ -6,9 +6,10 @@
 // Each `oxa stream <channel> <symbol>` command opens a single subscription,
 // emits one JSON record per stdout line (NDJSON), and runs until the user
 // hits Ctrl-C. JSON mode is the default; `--format pretty` adds a one-line
-// human-readable summary per event. `mempool` is the one channel whose symbol
-// is optional, and a channel served on one endpoint only (the SDK's table
-// names it, as for `mempool`) connects there unless --url or OXA_WS_URL is set.
+// human-readable summary per event. `mempool` takes an optional symbol,
+// `all_tickers` takes none, and every other channel needs one. A channel
+// served on one endpoint only (the SDK's table names it, as for `mempool`)
+// connects there unless --url or OXA_WS_URL is set.
 
 import { OxArchiveWs } from '@0xarchive/sdk';
 import { resolveApiKey } from '../lib/client.js';
@@ -79,13 +80,27 @@ export const REST_ONLY_HINTS: Readonly<Record<string, string>> = {
 
 /**
  * Channels whose symbol is optional. Without one, `mempool` streams every
- * pending transaction; every other channel needs a symbol.
+ * pending transaction our Hyperliquid node receives.
  */
 export const OPTIONAL_SYMBOL_CHANNELS: readonly string[] = ['mempool'];
 
-/** Exit with a validation error when a channel that needs a symbol has none. */
-export function requireSymbol(channel: string, symbol: string | undefined): void {
-  if ((symbol !== undefined && symbol !== '') || OPTIONAL_SYMBOL_CHANNELS.includes(channel)) return;
+/**
+ * Channels that take no symbol. The server sends `all_tickers` data only to a
+ * subscription without one, so a symbol would stream nothing.
+ */
+export const NO_SYMBOL_CHANNELS: readonly string[] = ['all_tickers'];
+
+/**
+ * Exit with a validation error when a channel that needs a symbol has none,
+ * or a channel that takes none has one. Every other channel needs a symbol.
+ */
+export function checkSymbol(channel: string, symbol: string | undefined): void {
+  const given = symbol !== undefined && symbol !== '';
+  if (NO_SYMBOL_CHANNELS.includes(channel)) {
+    if (given) exitError(`${channel} takes no symbol: \`oxa stream subscribe ${channel}\`.`, EXIT.VALIDATION);
+    return;
+  }
+  if (given || OPTIONAL_SYMBOL_CHANNELS.includes(channel)) return;
   exitError(`${channel} needs a symbol: \`oxa stream subscribe ${channel} <symbol>\`.`, EXIT.VALIDATION);
 }
 
@@ -431,8 +446,8 @@ export async function streamOrderbookCommand(symbol: string, options: StreamOpti
   return streamChannel(channel, symbol, options, requireLiveChannel(channel));
 }
 
-// `oxa stream subscribe <channel> [symbol]`: the symbol is optional on
-// `mempool` only.
+// `oxa stream subscribe <channel> [symbol]`: `mempool` takes an optional
+// symbol, `all_tickers` takes none, and every other channel needs one.
 export async function streamGenericCommand(
   channel: string,
   symbol: string | undefined,
@@ -443,6 +458,6 @@ export async function streamGenericCommand(
     exitError(`Unknown stream channel "${channel}". Live channels: ${liveChannels().join(', ')}.`, EXIT.VALIDATION);
   }
   const capability = requireLiveChannel(ch);
-  requireSymbol(ch, symbol);
+  checkSymbol(ch, symbol);
   return streamChannel(ch, symbol, options, capability);
 }

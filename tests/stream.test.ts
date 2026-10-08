@@ -1,12 +1,13 @@
 import * as sdk from '@0xarchive/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  NO_SYMBOL_CHANNELS,
   OPTIONAL_SYMBOL_CHANNELS,
   REPLAY_ONLY_HINTS,
   REST_ONLY_HINTS,
+  checkSymbol,
   isLighterDropNotice,
   parseIntervalMs,
-  requireSymbol,
   resolveChannel,
   streamGenericCommand,
   streamLiquidationsCommand,
@@ -696,13 +697,28 @@ describe.runIf(CHANNEL_TABLE)('oxa stream subscribe, driven by the channel table
     ['spot_orderbook', 'HYPE-USDC', 'HYPE-USDC'],
     ['spot_l4_orders', 'HYPE-USDC', 'HYPE-USDC'],
     ['hip3_l4_orders', 'xyz:TSLA', 'xyz:TSLA'],
-    ['all_tickers', 'BTC', 'BTC'],
   ])('subscribes to the live channel %s the table allows', async (channel, symbol, sent) => {
     expect(CHANNEL_TABLE![channel].live).toBe(true);
     await streamGenericCommand(channel, symbol, { format: 'json' });
     const ws = FakeWebSocket.instances[0];
     ws.fire('open');
     expect(JSON.parse(ws.sent[0])).toEqual({ op: 'subscribe', channel, symbol: sent });
+  });
+
+  it('subscribes to all_tickers without a symbol', async () => {
+    expect(CHANNEL_TABLE!.all_tickers.live).toBe(true);
+    await parseCli('stream', 'subscribe', 'all_tickers');
+    const ws = FakeWebSocket.instances[0];
+    expect(ws.url).toBe('wss://api.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
+    ws.fire('open');
+    expect(ws.frames()).toEqual([{ op: 'subscribe', channel: 'all_tickers' }]);
+  });
+
+  it('refuses a symbol on all_tickers before opening a socket', async () => {
+    await expectValidationExit(
+      () => streamGenericCommand('all_tickers', 'BTC', { format: 'json' }),
+      'all_tickers takes no symbol: `oxa stream subscribe all_tickers`.',
+    );
   });
 
   it('lists the live channels when the channel is unknown', async () => {
@@ -817,18 +833,27 @@ describe('stream endpoint and optional symbol', () => {
     expect(streamUrl({}, 'wss://flag.example/ws')).toBe('wss://flag.example/ws');
   });
 
-  it('makes the symbol optional on mempool only', () => {
+  it('makes the symbol optional on mempool, takes none on all_tickers, and needs one elsewhere', () => {
     expect(OPTIONAL_SYMBOL_CHANNELS).toEqual(['mempool']);
-    expect(() => requireSymbol('mempool', undefined)).not.toThrow();
-    expect(() => requireSymbol('trades', 'BTC')).not.toThrow();
+    expect(NO_SYMBOL_CHANNELS).toEqual(['all_tickers']);
+    expect(() => checkSymbol('mempool', undefined)).not.toThrow();
+    expect(() => checkSymbol('mempool', 'BTC')).not.toThrow();
+    expect(() => checkSymbol('all_tickers', undefined)).not.toThrow();
+    expect(() => checkSymbol('trades', 'BTC')).not.toThrow();
     for (const symbol of [undefined, '']) {
-      expect(() => requireSymbol('trades', symbol)).toThrow(ProcessExit);
+      expect(() => checkSymbol('trades', symbol)).toThrow(ProcessExit);
       expect(stderrPayloads().at(-1)).toEqual({
         error: 'trades needs a symbol: `oxa stream subscribe trades <symbol>`.',
         code: 2,
         type: 'validation',
       });
     }
+    expect(() => checkSymbol('all_tickers', 'BTC')).toThrow(ProcessExit);
+    expect(stderrPayloads().at(-1)).toEqual({
+      error: 'all_tickers takes no symbol: `oxa stream subscribe all_tickers`.',
+      code: 2,
+      type: 'validation',
+    });
   });
 });
 
@@ -863,7 +888,7 @@ describe.runIf(HAS_MEMPOOL)('oxa stream subscribe mempool', () => {
     expect(CHANNEL_TABLE!.mempool).toMatchObject({ live: true, replay: false, wsEndpoint: 'wss://stream.0xarchive.io/ws' });
   });
 
-  it('streams every pending transaction from the stream endpoint when the symbol is left out', async () => {
+  it('streams the unfiltered pending transactions from the stream endpoint when the symbol is left out', async () => {
     await parseCli('stream', 'subscribe', 'mempool');
     const ws = FakeWebSocket.instances[0];
     expect(ws.url).toBe('wss://stream.0xarchive.io/ws?apiKey=test-key&version=2026-10-01');
