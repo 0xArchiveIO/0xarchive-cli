@@ -123,7 +123,7 @@ import {
 import { capabilitiesCommand } from './commands/capabilities.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, hip3, hip4, lighter, or rh-lighter. ' +
@@ -1178,15 +1178,20 @@ stream
   .option('--format <format>', 'Output format: json (NDJSON) or pretty', 'json')
   .action(streamOrderbookCommand);
 
-// Generic channel subscription by name. Which channels stream live is the
-// SDK's channel table (WS_CHANNEL_CAPABILITIES, which mirrors
-// /v1/capabilities); replay-only channels are refused before a socket opens.
+// Generic channel subscription by name. Which channels stream live, and the
+// endpoint a channel served on one endpoint only connects to, is the SDK's
+// channel table (WS_CHANNEL_CAPABILITIES, which mirrors /v1/capabilities);
+// replay-only channels are refused before a socket opens. `mempool` takes an
+// optional symbol, `all_tickers` takes none, and every other channel needs one.
 stream
-  .command('subscribe <channel> <symbol>')
+  .command('subscribe <channel> [symbol]')
   .description(
     'Subscribe to a live WebSocket channel by name: every channel `oxa capabilities` lists as live, ' +
-      'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_trades, spot_l4_diffs, lighter_funding, rh_lighter_trades. ' +
+      'e.g. l4_diffs, orderbook_full, hip3_l4_orders, hip4_trades, spot_l4_diffs, lighter_funding, rh_lighter_trades, mempool. ' +
       'Symbols are dashed canonical for spot (HYPE-USDC); HIP-4 coins are bare numerics. ' +
+      'mempool (pending Hyperliquid transactions; Pro, Scale and Enterprise plans) takes an optional symbol: without one, ' +
+      'every pending transaction our Hyperliquid node receives streams. all_tickers takes no symbol, and every other channel needs one. ' +
+      'mempool is served on wss://stream.0xarchive.io/ws only, and the CLI connects there unless --url or OXA_WS_URL is set. ' +
       'Full-depth books (orderbook_full, hip3_orderbook_full) send an l4_snapshot with every level, then l4_batch changes. ' +
       'Replay-only channels (candles, hip3_candles, hip4_orderbook, hip4_open_interest, lighter_candles, ' +
       'lighter_l3_orderbook, rh_lighter_candles) and spot_twap, which is served over REST only, are refused.',
@@ -1207,7 +1212,7 @@ stream
     'Replay stored data over WebSocket, as NDJSON, until the replay completes: every channel `oxa capabilities` lists with replay. ' +
       'Timed channels keep their original timing (scaled by --speed). L4 channels on every venue and the full-depth books ' +
       '(orderbook_full, hip3_orderbook_full) replay in bulk: an l4_snapshot, then l4_batch pages, with --speed ignored. ' +
-      'Live-only channels (ticker, all_tickers, spot_orderbook, spot_trades) and spot_twap, which is served over REST only, ' +
+      'Live-only channels (ticker, all_tickers, spot_orderbook, spot_trades, mempool) and spot_twap, which is served over REST only, ' +
       'are refused before connecting.',
   )
   .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms)')

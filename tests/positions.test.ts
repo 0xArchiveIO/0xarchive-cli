@@ -546,7 +546,7 @@ describe('oxa positions', () => {
     await expectExit(
       () => positionsGetCommand({ exchange: 'rh-lighter', account: '1', format: 'json' }),
       5,
-      'Support for Lighter on Robinhood Chain (--exchange rh-lighter) requires @0xarchive/sdk 1.12.0 or newer. ' +
+      'Support for Lighter on Robinhood Chain (--exchange rh-lighter) requires @0xarchive/sdk 1.13.0 or newer. ' +
         'Reinstall @0xarchive/cli to pick it up.',
     );
   });

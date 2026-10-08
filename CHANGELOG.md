@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.11.0 - 2026-10-08
+
+### Added
+
+- `oxa stream subscribe mempool [symbol]`: pending Hyperliquid transactions (orders, cancels, modifies, TWAPs, leverage changes, transfers, and every other action type) as our Hyperliquid node receives them from its peers, before they are included in a block, on every Hyperliquid product (perps, HIP-3, HIP-4, and spot). Leave the symbol out for every pending transaction our Hyperliquid node receives, or pass one (`BTC`, `xyz:TSLA`, `HYPE-USDC`, or a bare numeric HIP-4 coin) for only the actions that reference that market. Each mempool data message is written as one NDJSON line holding the signed actions of one batch our node received. A pending transaction can still be rejected, expire, or never land. The channel is live only, and `oxa stream replay mempool` is refused before connecting because pending transactions are not stored. It is included with the Pro, Scale and Enterprise plans; on other plans the server answers `forbidden` and the CLI exits with code 3. When the unfiltered stream is at capacity the server answers `rate_limited` (exit code 4); subscribe with a symbol instead.
+- `oxa capabilities --format pretty` prints a row's WebSocket endpoint and plans when the row sets them, as the `mempool` row does. JSON output includes them as `wsEndpoint` and `plans`.
+
+### Changed
+
+- `oxa stream subscribe <channel> [symbol]`: `mempool` takes an optional symbol, `all_tickers` takes none, and every other channel needs one; the CLI says so before connecting. The server sends `all_tickers` data only to a subscription without a symbol, so a symbol given for it is now refused instead of opening a stream that receives nothing.
+- A channel served on one WebSocket endpoint only connects there by default: `mempool` connects to `wss://stream.0xarchive.io/ws`. The CLI reads the endpoint from the SDK's channel table. `--url` and `OXA_WS_URL` still take precedence; pointing them at `wss://api.0xarchive.io/ws` for `mempool` exits with code 2 before connecting. Every other channel keeps `wss://api.0xarchive.io/ws` as its default.
+- Requires `@0xarchive/sdk` 1.13.0 or newer, the release with the `mempool` channel and the endpoint and plans in its channel table.
+
 ## 1.10.0 - 2026-10-05
 
 This release adopts the 0xArchive API contract `2026-10-01`. Every request selects that API version (the `0xArchive-Version: 2026-10-01` header on REST, `version=2026-10-01` on WebSocket connections), and the CLI reads the response shapes of that version. The changes this brings are listed under Added and Changed.

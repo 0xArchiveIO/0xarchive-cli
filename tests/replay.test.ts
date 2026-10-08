@@ -217,12 +217,31 @@ describe.runIf(CHANNEL_TABLE)('oxa stream replay', () => {
 
   it('refuses exactly the channels the SDK table does not mark replayable', async () => {
     const liveOnly = Object.entries(CHANNEL_TABLE!).filter(([, c]) => !c.replay).map(([channel]) => channel);
-    expect(liveOnly.sort()).toEqual(['all_tickers', 'spot_orderbook', 'spot_trades', 'spot_twap', 'ticker']);
+    // `mempool` is in the table from SDK 1.13.0. Until that release is on npm,
+    // CI runs on the newest published SDK, whose table does not have it.
+    const expected = ['all_tickers', 'spot_orderbook', 'spot_trades', 'spot_twap', 'ticker'];
+    if (Object.hasOwn(CHANNEL_TABLE!, 'mempool')) expected.push('mempool');
+    expect(liveOnly.sort()).toEqual(expected.sort());
     for (const channel of liveOnly) {
       expect(await runCli('stream', 'replay', channel, 'BTC', '--start', START, '--end', END)).toBe(2);
     }
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
+
+  it.runIf(CHANNEL_TABLE && Object.hasOwn(CHANNEL_TABLE, 'mempool'))(
+    'refuses mempool, whose pending transactions are not stored, before opening a socket',
+    async () => {
+      expect(await runCli('stream', 'replay', 'mempool', 'BTC', '--start', START, '--end', END)).toBe(2);
+      expect(lastError()).toEqual({
+        error:
+          'mempool is live only; the API does not replay it. ' +
+          'Pending transactions are not stored; stream them live with `oxa stream subscribe mempool [symbol]`.',
+        code: 2,
+        type: 'validation',
+      });
+      expect(FakeSdkSocket.instances).toHaveLength(0);
+    },
+  );
 
   it.each([
     ['orderbook_full', 'BTC', 'BTC'],
@@ -299,7 +318,7 @@ describe.skipIf(CHANNEL_TABLE)('oxa stream replay on an SDK older than the floor
 
   it('asks for the SDK release with the channel table', async () => {
     expect(await runCli('stream', 'replay', 'trades', 'BTC', '--start', START, '--end', END)).toBe(5);
-    expect(lastError().error).toMatch(/requires @0xarchive\/sdk 1\.12\.0 or newer/);
+    expect(lastError().error).toMatch(/requires @0xarchive\/sdk 1\.13\.0 or newer/);
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 });

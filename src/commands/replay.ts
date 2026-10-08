@@ -28,6 +28,7 @@ export const LIVE_ONLY_HINTS: Readonly<Record<string, string>> = {
   spot_twap: 'Use `oxa spot twap history <symbol> --start ... --end ...` for Spot TWAP history.',
   ticker: 'Use `oxa summary get` or `oxa prices history` for stored prices.',
   all_tickers: 'Use `oxa summary get` or `oxa prices history` for stored prices.',
+  mempool: 'Pending transactions are not stored; stream them live with `oxa stream subscribe mempool [symbol]`.',
 };
 
 /** The channels the SDK's table marks as replayable, sorted. */

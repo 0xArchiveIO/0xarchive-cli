@@ -159,6 +159,14 @@ export interface CapabilityRow {
   pageLimit: number | null;
   intervals: string[];
   notes: string | null;
+  /**
+   * The only WebSocket endpoint that serves the datatype's channels, e.g.
+   * `wss://stream.0xarchive.io/ws` for `mempool`. Absent when they are served
+   * on the default endpoint, `wss://api.0xarchive.io/ws`.
+   */
+  wsEndpoint?: string;
+  /** The plans that include the datatype. Absent when every plan includes it. */
+  plans?: string[];
 }
 
 /** What one WebSocket channel offers, from the SDK's channel table. */
@@ -169,6 +177,15 @@ export interface WsChannelCapability {
   replay: boolean;
   /** Bulk replay: single-channel, an explicit end, speed ignored, an `l4_snapshot` then `l4_batch` pages. */
   bulkReplay: boolean;
+  /**
+   * The only endpoint that serves the channel, e.g.
+   * `wss://stream.0xarchive.io/ws` for `mempool`. Absent when it is served on
+   * the default endpoint. `oxa stream` connects there unless `--url` or
+   * `OXA_WS_URL` says otherwise.
+   */
+  wsEndpoint?: string;
+  /** The plans that include the channel. Absent when every plan includes it. */
+  plans?: readonly string[];
 }
 
 /** `client.capabilities()`: `GET /v1/capabilities`. */

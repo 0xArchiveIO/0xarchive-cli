@@ -202,7 +202,7 @@ describe('new analytics commands', () => {
       else sdk.state.clients.hyperliquid.breadth = undefined;
       expect(await runCli('breadth', 'current', '--exchange', exchange)).toBe(5);
       expect(lastError().error).toBe(
-        `Support for ${label} breadth requires @0xarchive/sdk 1.12.0 or newer. Reinstall @0xarchive/cli to pick it up.`,
+        `Support for ${label} breadth requires @0xarchive/sdk 1.13.0 or newer. Reinstall @0xarchive/cli to pick it up.`,
       );
     });
   });
@@ -464,7 +464,7 @@ describe('new analytics commands', () => {
     it('names the SDK floor when the installed SDK has no symbol list', async () => {
       sdk.state.clients.symbols = undefined;
       expect(await runCli('symbols')).toBe(5);
-      expect(lastError().error).toMatch(/^Support for the symbol list requires @0xarchive\/sdk 1\.12\.0 or newer/);
+      expect(lastError().error).toMatch(/^Support for the symbol list requires @0xarchive\/sdk 1\.13\.0 or newer/);
     });
   });
 
@@ -815,7 +815,7 @@ describe('new analytics commands', () => {
     it('names the SDK floor when positions freshness is missing', async () => {
       delete dq().positionsFreshness;
       expect(await runCli('data-quality', 'positions-freshness')).toBe(5);
-      expect(lastError().error).toMatch(/^Support for positions freshness requires @0xarchive\/sdk 1\.12\.0 or newer/);
+      expect(lastError().error).toMatch(/^Support for positions freshness requires @0xarchive\/sdk 1\.13\.0 or newer/);
     });
   });
 
