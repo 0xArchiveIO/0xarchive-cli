@@ -1310,7 +1310,7 @@ done
 
 ## For AI Agents
 
-The CLI is designed for Claude Code, ChatGPT Codex, CI, cron, notebook setup, and other coding-agent pipelines. For richer typed context inside the agent, pair the CLI with the [0xArchive skill](https://github.com/0xArchiveIO/0xarchive-skill), which installs into `.claude/skills/0xarchive` (Claude Code) or `.agents/skills/0xarchive` (ChatGPT Codex). If you manage skills through OpenClaw, `openclaw install 0xarchive` is the optional helper. With the skill loaded, an agent can run `oxa auth test` to verify access and then issue any market-data command below:
+The CLI is designed for Claude Code, ChatGPT Codex, CI, cron, notebook setup, and other coding-agent pipelines. For richer typed context inside the agent, pair the CLI with the [0xArchive skill](https://github.com/0xArchiveIO/0xarchive-quant), which installs into `.claude/skills/0xarchive` (Claude Code) or `.agents/skills/0xarchive` (ChatGPT Codex). If you manage skills through OpenClaw, `openclaw install 0xarchive` is the optional helper. With the skill loaded, an agent can run `oxa auth test` to verify access and then issue any market-data command below:
 
 ```bash
 # Verify API access
@@ -1406,7 +1406,7 @@ For large-scale data exports (route-specific order books, fill-level trade histo
 - [TypeScript SDK](https://npmjs.com/package/@0xarchive/sdk)
 - [Rust SDK](https://crates.io/crates/oxarchive)
 - [MCP Server](https://docs.0xarchive.io/mcp-server)
-- [0xArchive Skill](https://github.com/0xArchiveIO/0xarchive-skill)
+- [0xArchive agent skills](https://github.com/0xArchiveIO/0xarchive-quant)
 - [Examples](https://github.com/0xArchiveIO/examples)
 
 ## License
