@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-dark.png">
-  <img alt="oxa, the 0xArchive CLI: market data from your shell. A terminal listing the five largest open BTC longs on Hyperliquid." src="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-light.png" width="800">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-dark.svg">
+  <img alt="oxa, the 0xArchive CLI: market data from your shell. A terminal listing the five largest open BTC longs on Hyperliquid." src="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-light.svg" width="800">
 </picture>
 
 <a href="https://www.npmjs.com/package/@0xarchive/cli"><img alt="npm: @0xarchive/cli" src="https://img.shields.io/npm/v/%400xarchive%2Fcli?style=flat-square&label=npm&labelColor=3a3a37&color=21C55E"></a> <img alt="node: 18+" src="https://img.shields.io/badge/node-18+-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="output: JSON" src="https://img.shields.io/badge/output-JSON-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="data: Hyperliquid · Lighter" src="https://img.shields.io/badge/data-Hyperliquid_·_Lighter-21C55E?style=flat-square&labelColor=3a3a37">
