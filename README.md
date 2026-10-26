@@ -17,8 +17,6 @@ Query Hyperliquid and Lighter market data from a terminal, a script, CI, cron or
 npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side long --limit 5 --format pretty
 ```
 
-<sub>That command drew the terminal above, at 2026-10-26 19:41 UTC. Drop `--format pretty` for JSON.</sub>
-
 ## Highlights
 
 - **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`.
