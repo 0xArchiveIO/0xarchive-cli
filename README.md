@@ -1,10 +1,32 @@
-# @0xarchive/cli
+<div align="center">
 
-Terminal-first access to 0xArchive market data.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-dark.png">
+  <img alt="oxa, the 0xArchive CLI: market data from your shell. A terminal listing the five largest open BTC longs on Hyperliquid." src="https://raw.githubusercontent.com/0xArchiveIO/0xarchive-cli/HEAD/assets/readme/hero-light.png" width="800">
+</picture>
 
-0xArchive is granular market data infrastructure for two venues: Hyperliquid and Lighter. Lighter has two deployments: mainnet and Robinhood Chain. HIP-3 builder perps, HIP-4 outcome markets, and Hyperliquid Spot live under the Hyperliquid namespace; the CLI exposes them as `--exchange hip3`, `--exchange hip4`, and `--exchange spot`, with the `oxa hip4` and `oxa spot` groups for the data only those venues have. Lighter mainnet is `--exchange lighter` and Lighter on Robinhood Chain is `--exchange rh-lighter`. Account positions (`oxa positions ...`) cover Hyperliquid, HIP-3, and both Lighter deployments.
+<a href="https://www.npmjs.com/package/@0xarchive/cli"><img alt="npm: @0xarchive/cli" src="https://img.shields.io/npm/v/%400xarchive%2Fcli?style=flat-square&label=npm&labelColor=3a3a37&color=21C55E"></a> <img alt="node: 18+" src="https://img.shields.io/badge/node-18+-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="output: JSON" src="https://img.shields.io/badge/output-JSON-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-21C55E?style=flat-square&labelColor=3a3a37"> <img alt="data: Hyperliquid · Lighter" src="https://img.shields.io/badge/data-Hyperliquid_·_Lighter-21C55E?style=flat-square&labelColor=3a3a37">
 
-Use `oxa` when the job starts in a terminal, script, CI task, notebook setup step, Claude Code session, ChatGPT Codex session, or another coding-agent shell. Both coding agents can start here with `oxa auth test` and one market-data request before expanding into SDKs, MCP, skills, or Data Catalog exports. The command set covers order books, trades, candles, funding, open interest, liquidations, prices, freshness, Lighter L3, Hyperliquid/HIP-3 L4 routes, HIP-4 outcome markets, and Hyperliquid Spot, plus market breadth, cumulative volume delta, liquidation and trigger levels, the HIP-3 oracle, wallet classification, the symbol list, what each venue serves (`oxa capabilities`), webhooks, and WebSocket replay.
+[Install](#install) · [First request](#first-request) · [Commands](#commands) · [For AI agents](#for-ai-agents) · [Docs](https://docs.0xarchive.io/cli)
+
+</div>
+
+Query Hyperliquid and Lighter market data from a terminal, a script, CI, cron or a coding agent's shell. One command per question, JSON on stdout, errors as one line of JSON on stderr.
+
+```bash
+npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side long --limit 5 --format pretty
+```
+
+<sub>That command drew the terminal above, at 2026-10-26 19:41 UTC. Drop `--format pretty` for JSON.</sub>
+
+## Highlights
+
+- **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`.
+- **Built for agents and scripts.** JSON by default, stable `error_code` values on failure, documented exit codes, and `--out` to write a file.
+- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification.
+- **Streams and replay.** `oxa stream` subscribes to live WebSocket channels and replays history.
+- **Webhooks.** Create, dry-run and manage alert rules from the shell.
+- **Knows the coverage.** `oxa capabilities` says what each venue serves, over REST and WebSocket, and from when, with no key needed.
 
 ## Install
 
