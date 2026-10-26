@@ -19,7 +19,7 @@ npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side l
 
 ## Highlights
 
-- **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`.
+- **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`; Lighter has two deployments: mainnet and Robinhood Chain.
 - **Built for agents and scripts.** JSON by default, stable `error_code` values on failure, documented exit codes, and `--out` to write a file.
 - **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification.
 - **Streams and replay.** `oxa stream` subscribes to live WebSocket channels and replays history.
