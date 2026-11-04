@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.12.0 - Unreleased
+
+### Added
+
+- Four datasets included with the Build, Pro, Scale and Enterprise plans, on Hyperliquid (`--exchange hyperliquid`) and, except USDC flows, HIP-3 (`--exchange hip3`):
+  - `oxa trade-intent history --symbol <symbol>` (or `oxa trade-intent history <symbol>`): why a market traded, per bucket. USD volume of new longs and shorts, profit taken, stopped out (closes at a loss, liquidations, auto-deleveraging) and flips through zero, both sides of every trade, with market makers' legs apart in `mmUsd`, and the market's trailing-72h winners and losers as aggregates (no wallet is named). `--interval` from `1s` to `1d` (default `1h`), `--limit` up to 2,000. Hourly intervals from 2025-05-25 15:00 UTC on Hyperliquid and from 2025-10-13 12:00 UTC on HIP-3, minute intervals from 2026-07-14 00:00 UTC, second intervals for the last 3 days. JSON output keeps `meta.builtThrough`, `meta.preliminaryRowCount`, `meta.coverageFrom` and `meta.notice` when the API sets them.
+  - `oxa usdc-flows history` and `oxa usdc-flows volume`: USDC entering and leaving HyperCore through the Arbitrum bridge (`deposit`, `withdraw`) and HyperEVM (`evm_in`, `evm_out`), Hyperliquid only, from 2025-09-27 09:33 UTC. `history` lists every flow event with the HyperCore account and the event `id` to dedupe on, filtered by `--kind` and `--min-usd`; `volume` totals every flow per `--interval` with `netUsd`. `--exchange` defaults to `hyperliquid`.
+  - `oxa breadth above-ma current --n <5|20|50|200>` and `oxa breadth above-ma history --n ...`: the share of perps above their n-day moving average, with the quartiles of how far above or below. Each length starts on its own date: on Hyperliquid n = 5 from 2025-03-27, 20 from 2025-04-11, 50 from 2025-05-11 and 200 from 2025-10-08; on HIP-3 n = 5 from 2025-12-27, 20 from 2026-01-11, 50 from 2026-02-10 and 200 from 2026-07-10. `oxa breadth current` and `oxa breadth history` are unchanged (breadth above the UTC-session VWAP).
+  - `oxa positioning current --window <1h|4h|24h>`: every listed perp over the current trailing window, with its open interest at the start and end, taker buy and sell notional, liquidations, and typical move over windows of that length. Unpaged; `meta.asOf` is the 5-minute close the window ends at. Only the current window is served.
+- A `forbidden` error for a dataset the plan does not include names the `datatype`, the `required_plans` and the `upgrade_url` on the stderr JSON line, and exits with code 3 as before.
+
+### Changed
+
+- Requires `@0xarchive/sdk` 1.14.0 or newer, the release with these four datasets.
+
 ## 1.11.0 - 2026-10-08
 
 ### Added

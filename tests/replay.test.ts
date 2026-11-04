@@ -318,7 +318,7 @@ describe.skipIf(CHANNEL_TABLE)('oxa stream replay on an SDK older than the floor
 
   it('asks for the SDK release with the channel table', async () => {
     expect(await runCli('stream', 'replay', 'trades', 'BTC', '--start', START, '--end', END)).toBe(5);
-    expect(lastError().error).toMatch(/requires @0xarchive\/sdk 1\.13\.0 or newer/);
+    expect(lastError().error).toMatch(/requires @0xarchive\/sdk 1\.14\.0 or newer/);
     expect(FakeSdkSocket.instances).toHaveLength(0);
   });
 });

@@ -52,6 +52,10 @@ import {
 import { hip3OracleExternalPrice, hip3OracleDiscoveryBounds } from './commands/hip3.js';
 import { breadthCurrentCommand, breadthHistoryCommand } from './commands/breadth.js';
 import { cvdCommand } from './commands/cvd.js';
+import { breadthMaCurrentCommand, breadthMaHistoryCommand } from './commands/breadth-ma.js';
+import { tradeIntentHistoryCommand } from './commands/trade-intent.js';
+import { usdcFlowsHistoryCommand, usdcFlowsVolumeCommand } from './commands/usdc-flows.js';
+import { positioningCurrentCommand } from './commands/positioning.js';
 import { walletsClassifyCommand, WALLET_SORTS } from './commands/wallets.js';
 import { symbolsCommand } from './commands/symbols.js';
 import {
@@ -123,7 +127,7 @@ import {
 import { capabilitiesCommand } from './commands/capabilities.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, hip3, hip4, lighter, or rh-lighter. ' +
@@ -274,7 +278,9 @@ program
 
 const breadth = program
   .command('breadth')
-  .description('Market breadth above the current UTC-session VWAP (Hyperliquid and HIP-3)');
+  .description(
+    'Market breadth on Hyperliquid and HIP-3: above the current UTC-session VWAP (current, history) and above the n-day moving average (above-ma)',
+  );
 
 breadth
   .command('current')
@@ -298,6 +304,40 @@ breadth
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(breadthHistoryCommand);
 
+// ── oxa breadth above-ma current / history ─────────────────────────────
+
+const BUILD_AND_ABOVE = 'Build, Pro, Scale and Enterprise plans';
+
+const breadthAboveMa = breadth
+  .command('above-ma')
+  .description(
+    `Share of perps above their n-day moving average (n = 5, 20, 50 or 200), with the quartiles of how far above or below (Hyperliquid and HIP-3; ${BUILD_AND_ABOVE})`,
+  );
+
+breadthAboveMa
+  .command('current')
+  .description('Get the newest one-minute reading, about 4 minutes behind now. valuePct is null when no perp is eligible, never 0.')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--n <days>', 'Moving-average length in days: 5, 20, 50, or 200 (required)')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthMaCurrentCommand);
+
+breadthAboveMa
+  .command('history')
+  .description('Get one reading per bucket, oldest first: each bucket carries its last reading, never an average.')
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--n <days>', 'Moving-average length in days: 5, 20, 50, or 200 (required)')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Bucket width: 1m (default), 5m, 15m, 30m, 1h, 4h, 1d')
+  .option('--limit <n>', 'Buckets per page, 1 to 1000 (default 100)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --n, --start, --end and --interval)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(breadthMaHistoryCommand);
+
 // ── oxa cvd history (also: oxa cvd <symbol>) ───────────────────────────
 
 program
@@ -318,6 +358,84 @@ program
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(cvdCommand);
+
+// ── oxa trade-intent history ────────────────────────────────────────────
+
+program
+  .command('trade-intent')
+  .description(`Trade intent: USD volume by why it traded, per bucket (Hyperliquid and HIP-3; ${BUILD_AND_ABOVE})`)
+  .command('history [symbol]')
+  .description(
+    'Get new longs and shorts, profit taken, stopped out, and flips per bucket, market makers apart, with the trailing-72h winners and losers as aggregates',
+  )
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--symbol <symbol>', 'Coin symbol (e.g. BTC, xyz:TSLA); or pass it as the first argument')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Bucket width: 1s, 5s, 15s, 1m, 5m, 15m, 1h (default), 4h, 1d')
+  .option('--limit <n>', 'Buckets per page, 1 to 2000 (default 500)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and --interval)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(tradeIntentHistoryCommand);
+
+// ── oxa usdc-flows history / volume ────────────────────────────────────
+
+const usdcFlows = program
+  .command('usdc-flows')
+  .description(
+    `USDC entering and leaving HyperCore: Arbitrum bridge deposits and withdrawals, and transfers to and from HyperEVM (Hyperliquid only; ${BUILD_AND_ABOVE})`,
+  );
+
+const USDC_EXCHANGE_DESC = 'Exchange: hyperliquid (the only venue that serves USDC flows)';
+
+usdcFlows
+  .command('history')
+  .description('Get every flow event, oldest first in execution order, with the HyperCore account and the event id to dedupe on')
+  .option('--exchange <exchange>', USDC_EXCHANGE_DESC, 'hyperliquid')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--kind <kind>', 'Keep one kind: deposit, withdraw, evm_in, or evm_out')
+  .option('--min-usd <usd>', 'Keep flows of at least this many USD, 0 to 1000000000000')
+  .option('--limit <n>', 'Events per page, 1 to 1000 (default 100)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and filters)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(usdcFlowsHistoryCommand);
+
+usdcFlows
+  .command('volume')
+  .description('Get totals per bucket by kind, with net USD, zeros included; every flow counts')
+  .option('--exchange <exchange>', USDC_EXCHANGE_DESC, 'hyperliquid')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 24 hours before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Bucket width: 1m, 5m, 15m, 30m, 1h (default), 4h, 1d')
+  .option('--limit <n>', 'Buckets per page, 1 to 1000 (default 100)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --start, --end and --interval)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(usdcFlowsVolumeCommand);
+
+// ── oxa positioning current ─────────────────────────────────────────────
+
+program
+  .command('positioning')
+  .description(
+    `Positioning cross-section: every listed perp over the current trailing window (Hyperliquid and HIP-3; ${BUILD_AND_ABOVE})`,
+  )
+  .command('current')
+  .description(
+    'Get each listed perp\'s open interest change, taker buy and sell volume, liquidations, and typical move over the trailing window. Current window only, unpaged.',
+  )
+  .requiredOption('--exchange <exchange>', HL_EXCHANGE_DESC)
+  .option('--window <window>', 'Trailing window: 1h, 4h, or 24h (required)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(positioningCurrentCommand);
 
 // ── oxa funding current / history ───────────────────────────────────────
 

@@ -93,12 +93,19 @@ export function apiErrorFields(error: OxArchiveError): ApiErrorFields {
     requestId?: unknown;
     param?: unknown;
     validValues?: unknown;
+    datatype?: unknown;
+    requiredPlans?: unknown;
+    upgradeUrl?: unknown;
+    body?: unknown;
   };
   const errorCode = stringOrUndefined(e.errorCode);
   const requestId = stringOrUndefined(e.requestId);
-  const validValues = Array.isArray(e.validValues)
-    ? e.validValues.filter((v): v is string => typeof v === 'string')
-    : undefined;
+  const validValues = stringList(e.validValues);
+  // A plan refusal names the datatype, the plans that include it and where to
+  // upgrade. The SDK's PlanRequiredError carries them as properties; an older
+  // SDK keeps them in the error body.
+  const body = (e.body && typeof e.body === 'object' ? e.body : {}) as Record<string, unknown>;
+  const requiredPlans = stringList(e.requiredPlans ?? body.requiredPlans ?? body.required_plans);
   return {
     error_code: errorCode,
     request_id: requestId,
@@ -107,8 +114,20 @@ export function apiErrorFields(error: OxArchiveError): ApiErrorFields {
     // carries neither a code nor a request id.
     status: errorCode !== undefined || requestId !== undefined ? e.code : undefined,
     param: stringOrUndefined(e.param),
-    valid_values: validValues && validValues.length > 0 ? validValues : undefined,
+    valid_values: validValues,
+    datatype: requiredPlans ? stringOrUndefined(e.datatype ?? body.datatype) : undefined,
+    required_plans: requiredPlans,
+    upgrade_url: requiredPlans
+      ? stringOrUndefined(e.upgradeUrl ?? body.upgradeUrl ?? body.upgrade_url)
+      : undefined,
   };
+}
+
+/** The strings of an array, or undefined when there are none. */
+function stringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const strings = value.filter((v): v is string => typeof v === 'string');
+  return strings.length > 0 ? strings : undefined;
 }
 
 /**

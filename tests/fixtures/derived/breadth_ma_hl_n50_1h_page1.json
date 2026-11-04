@@ -1,0 +1,102 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/breadth/above-ma",
+    "query": {
+      "n": 50,
+      "start": 1793577600000,
+      "end": 1793592000000,
+      "interval": "1h",
+      "limit": 3
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "timestamp": "2026-11-02T00:00:00.000Z",
+        "timestamp_ms": 1793577600000,
+        "calculated_at": "2026-11-02T01:00:00.000Z",
+        "calculated_at_ms": 1793581200000,
+        "n": 50,
+        "method": "ma-breadth/1",
+        "value_pct": 5.0562,
+        "coverage_ratio": 0.8018,
+        "counts": {
+          "candidates": 222,
+          "eligible": 178,
+          "above": 9,
+          "at": 0,
+          "below": 169,
+          "excluded_stale_price": 43,
+          "excluded_short_history": 1
+        },
+        "distance": {
+          "p25": -0.187861,
+          "median": -0.149888,
+          "p75": -0.105872
+        },
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-02T01:00:00.000Z",
+        "timestamp_ms": 1793581200000,
+        "calculated_at": "2026-11-02T02:00:00.000Z",
+        "calculated_at_ms": 1793584800000,
+        "n": 50,
+        "method": "ma-breadth/1",
+        "value_pct": 5.0562,
+        "coverage_ratio": 0.8018,
+        "counts": {
+          "candidates": 222,
+          "eligible": 178,
+          "above": 9,
+          "at": 0,
+          "below": 169,
+          "excluded_stale_price": 43,
+          "excluded_short_history": 1
+        },
+        "distance": {
+          "p25": -0.185158,
+          "median": -0.148414,
+          "p75": -0.103643
+        },
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-02T02:00:00.000Z",
+        "timestamp_ms": 1793584800000,
+        "calculated_at": "2026-11-02T03:00:00.000Z",
+        "calculated_at_ms": 1793588400000,
+        "n": 50,
+        "method": "ma-breadth/1",
+        "value_pct": 5.0562,
+        "coverage_ratio": 0.8018,
+        "counts": {
+          "candidates": 222,
+          "eligible": 178,
+          "above": 9,
+          "at": 0,
+          "below": 169,
+          "excluded_stale_price": 43,
+          "excluded_short_history": 1
+        },
+        "distance": {
+          "p25": -0.184276,
+          "median": -0.148243,
+          "p75": -0.10498
+        },
+        "is_final": true
+      }
+    ],
+    "meta": {
+      "count": 3,
+      "next_cursor": "1793588400000",
+      "request_id": "687a0f7d-25ab-4eb3-9b6a-89db26749051",
+      "has_more": true
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

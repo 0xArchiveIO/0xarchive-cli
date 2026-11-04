@@ -1,0 +1,20 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/positioning",
+    "query": {
+      "window": "4h"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 503,
+  "body": {
+    "code": 503,
+    "error": "Positioning is still being prepared. Retry in a few seconds.",
+    "error_code": "upstream_unavailable",
+    "request_id": "59f1c906-2b33-4d18-a95c-cbd968c54d0c",
+    "success": false
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served",
+  "note": "the first request of a fresh process, before its first build finished; the retry 10 s later was served"
+}

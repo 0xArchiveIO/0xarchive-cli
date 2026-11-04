@@ -1,7 +1,9 @@
-// The @0xarchive/sdk resources added in the SDK floor release: breadth, CVD,
-// the HIP-3 oracle, HIP-4 questions and outcome slugs, wallet classification,
-// the symbol universe, liquidation and trigger levels, data quality, Spot L4
-// history, webhooks, capabilities, and the WebSocket channel table.
+// The @0xarchive/sdk resources newer than the first releases the CLI used:
+// breadth, CVD, the HIP-3 oracle, HIP-4 questions and outcome slugs, wallet
+// classification, the symbol universe, liquidation and trigger levels, data
+// quality, Spot L4 history, webhooks, capabilities, the WebSocket channel
+// table, and the Build-and-above datasets (trade intent, USDC flows, breadth
+// above the n-day moving average, and positioning).
 //
 // The interfaces below describe the calls the CLI makes, so the commands
 // type-check on their own and fail with a clear message on an SDK install
@@ -76,6 +78,41 @@ export interface WalletsResource {
 
 export interface SymbolsResource {
   list(): Promise<unknown[]>;
+}
+
+/**
+ * Trade intent (`client.hyperliquid.tradeIntent`, `client.hyperliquid.hip3.tradeIntent`):
+ * USD volume by why it traded, per bucket. Build and above.
+ */
+export interface TradeIntentResource {
+  history(symbol: string, params?: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
+}
+
+/**
+ * USDC entering and leaving HyperCore (`client.hyperliquid.usdcFlows`): every
+ * flow event, and totals per bucket. Hyperliquid only; Build and above.
+ */
+export interface UsdcFlowsResource {
+  history(params?: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
+  volume(params?: Record<string, unknown>): Promise<SdkPage<unknown[]>>;
+}
+
+/**
+ * Breadth above the n-day moving average (`client.hyperliquid.breadthMa`,
+ * `client.hyperliquid.hip3.breadthMa`). `n` is required. Build and above.
+ */
+export interface BreadthMaResource {
+  current(params: { n: number }): Promise<unknown>;
+  history(params: { n: number } & Record<string, unknown>): Promise<SdkPage<unknown[]>>;
+}
+
+/**
+ * The positioning cross-section (`client.hyperliquid.positioning`,
+ * `client.hyperliquid.hip3.positioning`): every listed perp over the current
+ * trailing window, unpaged, with `meta.asOf`. Build and above.
+ */
+export interface PositioningResource {
+  current(params: { window: string }): Promise<SdkPage<unknown[]>>;
 }
 
 export interface LiquidationLevelsResource {
@@ -230,6 +267,40 @@ export function getBreadthResource(client: OxArchive, venue: HyperliquidVenue): 
 
 export function getCvdResource(client: OxArchive, venue: HyperliquidVenue): CvdResource {
   return resource<CvdResource>(venueClient(client, venue), 'cvd', `${exchangeLabel(venue)} CVD`);
+}
+
+/** Trade intent: `client.hyperliquid.tradeIntent` or `client.hyperliquid.hip3.tradeIntent`. */
+export function getTradeIntentResource(client: OxArchive, venue: HyperliquidVenue): TradeIntentResource {
+  const intent = resource<Partial<TradeIntentResource>>(
+    venueClient(client, venue),
+    'tradeIntent',
+    `${exchangeLabel(venue)} trade intent`,
+  );
+  if (typeof intent.history !== 'function') sdkTooOld(`${exchangeLabel(venue)} trade intent`);
+  return intent as TradeIntentResource;
+}
+
+/** USDC flows: `client.hyperliquid.usdcFlows` (Hyperliquid only). */
+export function getUsdcFlowsResource(client: OxArchive): UsdcFlowsResource {
+  const flows = resource<Partial<UsdcFlowsResource>>(client.hyperliquid, 'usdcFlows', 'USDC flows');
+  if (typeof flows.history !== 'function' || typeof flows.volume !== 'function') sdkTooOld('USDC flows');
+  return flows as UsdcFlowsResource;
+}
+
+/** Breadth above the n-day moving average: `client.hyperliquid.breadthMa` or `client.hyperliquid.hip3.breadthMa`. */
+export function getBreadthMaResource(client: OxArchive, venue: HyperliquidVenue): BreadthMaResource {
+  const feature = `${exchangeLabel(venue)} moving-average breadth`;
+  const breadthMa = resource<Partial<BreadthMaResource>>(venueClient(client, venue), 'breadthMa', feature);
+  if (typeof breadthMa.current !== 'function' || typeof breadthMa.history !== 'function') sdkTooOld(feature);
+  return breadthMa as BreadthMaResource;
+}
+
+/** Positioning: `client.hyperliquid.positioning` or `client.hyperliquid.hip3.positioning`. */
+export function getPositioningResource(client: OxArchive, venue: HyperliquidVenue): PositioningResource {
+  const feature = `${exchangeLabel(venue)} positioning`;
+  const positioning = resource<Partial<PositioningResource>>(venueClient(client, venue), 'positioning', feature);
+  if (typeof positioning.current !== 'function') sdkTooOld(feature);
+  return positioning as PositioningResource;
 }
 
 export function getWalletsResource(client: OxArchive, venue: HyperliquidVenue): WalletsResource {
