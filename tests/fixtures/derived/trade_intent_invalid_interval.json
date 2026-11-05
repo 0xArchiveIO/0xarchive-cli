@@ -1,0 +1,31 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/trade-intent/BTC",
+    "query": {
+      "interval": "2m"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 400,
+  "body": {
+    "code": 400,
+    "error": "Invalid interval '2m'. Use one of: 1s, 5s, 15s, 1m, 5m, 15m, 1h, 4h, 1d.",
+    "error_code": "invalid_interval",
+    "param": "interval",
+    "request_id": "94cf6ca1-6ccb-44d2-94eb-db8490ee9ed3",
+    "success": false,
+    "valid_values": [
+      "1s",
+      "5s",
+      "15s",
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h",
+      "1d"
+    ]
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

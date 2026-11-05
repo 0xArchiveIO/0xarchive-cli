@@ -46,6 +46,12 @@ export interface ApiErrorFields {
   status?: number;
   param?: string;
   valid_values?: string[];
+  /** On a plan refusal (`forbidden`): the datatype the plan does not include. */
+  datatype?: string;
+  /** On a plan refusal: the plans that include the datatype, e.g. `["build", "pro", "scale", "enterprise"]`. */
+  required_plans?: string[];
+  /** On a plan refusal: where to upgrade. */
+  upgrade_url?: string;
 }
 
 /**

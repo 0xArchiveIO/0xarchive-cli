@@ -1,0 +1,92 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/positioning",
+    "query": {
+      "window": "4h"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "symbol": "0G",
+        "window": "4h",
+        "window_start": "2026-11-04T16:00:00.000Z",
+        "window_start_ms": 1793808000000,
+        "window_end": "2026-11-04T20:00:00.000Z",
+        "window_end_ms": 1793822400000,
+        "oi_start": 6731236.0,
+        "oi_end": 6720526.0,
+        "mark_start": 0.161752,
+        "mark_end": 0.15742,
+        "oi_buckets": 48,
+        "buy_usd": 30896.46,
+        "sell_usd": 32642.46,
+        "liq_long_usd": 0.0,
+        "liq_short_usd": 0.0,
+        "liq_long_count": 0,
+        "liq_short_count": 0,
+        "typical_price": 0.01190657284537222,
+        "typical_oi": 0.004222354480843349,
+        "typical_flow": 0.10218384332958294,
+        "typical_windows": 1952
+      },
+      {
+        "symbol": "2Z",
+        "window": "4h",
+        "window_start": "2026-11-04T16:00:00.000Z",
+        "window_start_ms": 1793808000000,
+        "window_end": "2026-11-04T20:00:00.000Z",
+        "window_end_ms": 1793822400000,
+        "oi_start": 23144098.0,
+        "oi_end": 23636268.0,
+        "mark_start": 0.024193,
+        "mark_end": 0.023492,
+        "oi_buckets": 48,
+        "buy_usd": 94343.97,
+        "sell_usd": 94564.1,
+        "liq_long_usd": 0.0,
+        "liq_short_usd": 0.0,
+        "liq_long_count": 0,
+        "liq_short_count": 0,
+        "typical_price": 0.012315244830125749,
+        "typical_oi": 0.007230344051842141,
+        "typical_flow": 0.06551951780743451,
+        "typical_windows": 1952
+      },
+      {
+        "symbol": "AAVE",
+        "window": "4h",
+        "window_start": "2026-11-04T16:00:00.000Z",
+        "window_start_ms": 1793808000000,
+        "window_end": "2026-11-04T20:00:00.000Z",
+        "window_end_ms": 1793822400000,
+        "oi_start": 439704.62,
+        "oi_end": 436568.48,
+        "mark_start": 133.09,
+        "mark_end": 130.4,
+        "oi_buckets": 48,
+        "buy_usd": 967172.95,
+        "sell_usd": 910812.05,
+        "liq_long_usd": 0.0,
+        "liq_short_usd": 0.0,
+        "liq_long_count": 0,
+        "liq_short_count": 0,
+        "typical_price": 0.013204298929843095,
+        "typical_oi": 0.007025976283951629,
+        "typical_flow": 0.18179132609275622,
+        "typical_windows": 1952
+      }
+    ],
+    "meta": {
+      "count": 179,
+      "request_id": "2cc540ed-b4ed-4670-b356-7159d1cdaee2",
+      "as_of": "2026-11-04T20:00:00.000Z"
+    }
+  },
+  "note": "data trimmed to the first 3 of the 179 records recorded; meta exactly as recorded",
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

@@ -1,0 +1,44 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/breadth/above-ma/current",
+    "query": {
+      "n": 200
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "timestamp": "2026-11-04T19:59:00.000Z",
+      "timestamp_ms": 1793822340000,
+      "calculated_at": "2026-11-04T20:00:00.000Z",
+      "calculated_at_ms": 1793822400000,
+      "n": 200,
+      "method": "ma-breadth/1",
+      "value_pct": 31.7919,
+      "coverage_ratio": 0.7793,
+      "counts": {
+        "candidates": 222,
+        "eligible": 173,
+        "above": 55,
+        "at": 0,
+        "below": 118,
+        "excluded_stale_price": 43,
+        "excluded_short_history": 6
+      },
+      "distance": {
+        "p25": -0.194641,
+        "median": -0.081344,
+        "p75": 0.066203
+      },
+      "is_final": false
+    },
+    "meta": {
+      "count": 1,
+      "request_id": "b4741456-b064-4db9-b376-420bb2c40fb2"
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

@@ -1,0 +1,25 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/usdc-flows",
+    "query": {
+      "start": 1782864000000,
+      "end": 1793318400000,
+      "min_usd": 100000000000,
+      "limit": 10
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [],
+    "meta": {
+      "count": 0,
+      "next_cursor": "1785542399999_18446744073709551615_4294967295",
+      "request_id": "b612f8d4-40ba-4a5f-8119-8755adef822a",
+      "has_more": true
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

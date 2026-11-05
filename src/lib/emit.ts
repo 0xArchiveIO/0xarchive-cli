@@ -134,3 +134,19 @@ export function isoTime(value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
   return cell(value);
 }
+
+/**
+ * The response `meta` fields named in `keys` that the response set (camelCase
+ * as the SDK returns them), or undefined when it set none of them. Commands
+ * keep the fields that change how a page reads, such as `builtThrough`,
+ * `coverageFrom` and `notice`, and leave out `requestId` and `count`.
+ */
+export function pickMeta(meta: unknown, keys: readonly string[]): Record<string, unknown> | undefined {
+  if (meta === null || typeof meta !== 'object') return undefined;
+  const source = meta as Record<string, unknown>;
+  const picked: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) picked[key] = source[key];
+  }
+  return Object.keys(picked).length > 0 ? picked : undefined;
+}

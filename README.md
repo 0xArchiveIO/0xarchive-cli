@@ -21,7 +21,7 @@ npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side l
 
 - **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`; Lighter has two deployments: mainnet and Robinhood Chain.
 - **Built for agents and scripts.** JSON by default, stable `error_code` values on failure, documented exit codes, and `--out` to write a file.
-- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification.
+- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification, plus trade intent, USDC flows, breadth above the n-day moving average and positioning on the Build plan and above.
 - **Streams and replay.** `oxa stream` subscribes to live WebSocket channels and replays history.
 - **Webhooks.** Create, dry-run and manage alert rules from the shell.
 - **Knows the coverage.** `oxa capabilities` says what each venue serves, over REST and WebSocket, and from when, with no key needed.
@@ -143,7 +143,7 @@ oxa orderbook history --exchange hip4 --symbol "$COIN" --start $HOUR_AGO --end $
 oxa instruments list --exchange rh-lighter
 ```
 
-A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`.
+A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`. USDC flows, which only Hyperliquid serves, keep the shared form, `oxa usdc-flows history|volume`, with `--exchange hyperliquid` as the default.
 
 The earlier forms keep working and run the same commands: `oxa trades fetch` (`oxa trades history`), `oxa candles`, `oxa prices`, and `oxa cvd <symbol>` (their `history`), `oxa summary` and `oxa freshness` (their `get`), `oxa instruments` and `oxa symbols` (their `list`), `oxa l3 ...` and `oxa accounts by-l1` (under `oxa lighter`), `oxa outcomes ...` (under `oxa hip4`), `oxa spot pair <symbol>` (`oxa spot pairs get`), and the Spot and HIP-4 market-data commands under `oxa spot` and `oxa hip4`.
 
@@ -151,7 +151,12 @@ Which venue serves which datatype, over REST and WebSocket, and from when, is `o
 
 ## Plans and Data Access
 
-Every command below works on every plan, including Free, except the live `mempool` stream (`oxa stream subscribe mempool`), which is included with the Pro, Scale and Enterprise plans. Apart from the live mempool stream, Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. Plans gate capacity, Free's 30-day history window and the live mempool stream; every other route family, schema and served depth is on every plan. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
+Every command below works on every plan, including Free, with these exceptions:
+
+- The live `mempool` stream (`oxa stream subscribe mempool`) is included with the Pro, Scale and Enterprise plans.
+- Four datasets are included with the Build, Pro, Scale and Enterprise plans: trade intent (`oxa trade-intent`), USDC flows (`oxa usdc-flows`), breadth above the n-day moving average (`oxa breadth above-ma`), and positioning (`oxa positioning`). On Free, the API answers `forbidden` and the CLI exits with code 3; the error line names the `datatype`, the `required_plans` and the `upgrade_url`.
+
+Apart from these, Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
 
 ## Commands
 
@@ -314,6 +319,102 @@ oxa cvd xyz:SP500 --exchange hip3
 | `--format` | No | `json` (default) or `pretty` |
 
 While `has_more` is true, run the command again with `--cursor <nextCursor>` and the same `--start`, `--end`, and `--interval`. Below `1h` a page can hold fewer than `--limit` buckets and still have more after it, so stop on `has_more`, not on a short page. `cumulativeDelta` restarts on every page: rebuild it from `delta` when joining pages. A response that is one page of several says so in `meta.notice`.
+
+### `oxa breadth above-ma current` and `oxa breadth above-ma history`
+
+Breadth above the n-day moving average: the share of perps trading above their 5, 20, 50 or 200-day moving average, with the quartiles of how far above or below (`distance.p25`, `distance.median`, `distance.p75`, as price / average - 1), on Hyperliquid (`--exchange hyperliquid`) and HIP-3 (`--exchange hip3`). Included with the Build, Pro, Scale and Enterprise plans. `oxa breadth current` and `oxa breadth history` stay breadth above the UTC-session VWAP.
+
+`--n` is required: each length answers a different question and starts on its own date. Hyperliquid: n = 5 from 2025-03-27, n = 20 from 2025-04-11, n = 50 from 2025-05-11, n = 200 from 2025-10-08. HIP-3: n = 5 from 2025-12-27, n = 20 from 2026-01-11, n = 50 from 2026-02-10, n = 200 from 2026-07-10 (all 00:00 UTC). A window that ends before its length's first reading is empty, with `meta.coverageFrom` and `meta.notice`.
+
+```bash
+oxa breadth above-ma current --exchange hyperliquid --n 50
+oxa breadth above-ma history --exchange hip3 --n 200 --start $WEEK_AGO --end $NOW --interval 1d
+```
+
+Each bucket carries its last reading, as of its end (`calculatedAt`); the bucket still forming is as of about 4 minutes before now. Percentages are never averaged across buckets. Candidates are every perp the venue ever listed, from its first one-minute bar: a delisted perp stays a candidate, counted in `counts.excludedStalePrice` from 24 hours after its last trade, and a perp younger than n days counts in `counts.excludedShortHistory`. So `coverageRatio` depends on n, is not a data-quality ratio, and is not comparable with breadth above the session VWAP. `valuePct` and `distance` are `null`, never 0, when no perp is eligible. `current` is the newest one-minute reading.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--n` | Yes | Moving-average length in days: `5`, `20`, `50` or `200` |
+| `--start` | No (`history`) | Start time (ISO 8601 or Unix ms); defaults to 24 hours before `--end` |
+| `--end` | No (`history`) | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No (`history`) | `1m` (default), `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
+| `--limit` | No (`history`) | Buckets per page, 1 to 1,000 (default 100) |
+| `--cursor` | No (`history`) | Pagination cursor from the previous response, with the same `--n`, `--start`, `--end`, and `--interval` |
+| `--out` | No (`history`) | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa trade-intent history`
+
+Why one Hyperliquid or HIP-3 market traded, bucket by bucket: the USD volume of new longs and shorts (`openLong`, `openShort`), profit taken (`tpLong`, `tpShort`), stopped out (`stopLong`, `stopShort`: closes at a loss, liquidations, auto-deleveraging), and flips through zero (`flipLs`, `flipSl`). Both sides of every trade count; market makers' legs are in `mmUsd` only. Each bucket also carries the market's trailing-72h winners and losers as aggregates (`winnersNet`, `winnersGross`, `winnersCount`, `winnersFlow` and the `losers*` twins); no wallet is named. Included with the Build, Pro, Scale and Enterprise plans.
+
+```bash
+oxa trade-intent history --exchange hyperliquid --symbol BTC --start $DAY_AGO --end $NOW --interval 1h
+oxa trade-intent history xyz:XYZ100 --exchange hip3 --interval 1d --start $WEEK_AGO --end $NOW
+```
+
+Coverage: hourly intervals (`1h`, `4h`, `1d`) from 2025-05-25 15:00 UTC on Hyperliquid and from 2025-10-13 12:00 UTC on HIP-3; minute intervals from 2026-07-14 00:00 UTC; second intervals for the last 3 days. A market idle for more than 7 days has no buckets there: a gap, not zero. Second buckets carry no `close`, `priceSource`, or cohort net, gross and counts; a second without a bucket had no trades, up to `meta.builtThrough`.
+
+`isFinal` says a bucket will not change. `preliminary` buckets hold the open hour and are replaced as final data lands; `preliminaryFrom` says where inside the bucket that begins, and `meta.preliminaryRowCount` counts them. `quality` is `ok`, `partial`, or `quarantined` (its winners' and losers' figures are null). JSON output keeps `meta.builtThrough`, `meta.preliminaryRowCount`, `meta.coverageFrom`, and `meta.notice` when the API sets them.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--symbol` | Yes | Market symbol (HIP-3 symbols keep their prefix and case, e.g. `xyz:XYZ100`), or the first argument |
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--start` | No | Start time (ISO 8601 or Unix ms); defaults to 24 hours before `--end` |
+| `--end` | No | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No | `1s`, `5s`, `15s`, `1m`, `5m`, `15m`, `1h` (default), `4h`, `1d` |
+| `--limit` | No | Buckets per page, 1 to 2,000 (default 500) |
+| `--cursor` | No | Pagination cursor from the previous response |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+Set `--start` and `--end` when paging: without them each request takes the 24 hours before now, so a walk through pages can slide. A page can hold fewer than `--limit` buckets, or none, and still have more after it: stop on `has_more`.
+
+### `oxa usdc-flows history` and `oxa usdc-flows volume`
+
+USDC entering and leaving HyperCore: Arbitrum bridge deposits and withdrawals (`deposit`, `withdraw`) and transfers to and from HyperEVM (`evm_in`, `evm_out`; HyperEVM also carries CCTP). Hyperliquid only, from 2025-09-27 09:33 UTC; `--exchange` defaults to `hyperliquid`. Included with the Build, Pro, Scale and Enterprise plans.
+
+```bash
+oxa usdc-flows history --start $DAY_AGO --end $NOW --min-usd 1000000
+oxa usdc-flows volume --exchange hyperliquid --start $WEEK_AGO --end $NOW --interval 1d
+```
+
+`history` returns every flow event, oldest first in execution order: `id`, `timestamp`, `kind`, `amountUsd`, `feeUsd`, `user` (the HyperCore account), `txHash`, `blockNumber`, and `eventIndex`. `id` (`block:index`) is the event's identity: dedupe and join pages on it, since one bridge batch can carry several withdrawals under one hash and time. Events in the last 3 hours can still be added after you read them: read that span again and dedupe on `id`. With a high `--min-usd` a page reads at most 31 days, so it can be empty and still have `has_more: true`: stop on `has_more`, never on an empty page.
+
+`volume` returns one bucket per interval, zeros included: the USD and count of each kind and `netUsd` (deposits plus HyperEVM inflows, less withdrawals and HyperEVM outflows). Totals count every flow, so `volume` takes no `--kind` or `--min-usd`. It never returns the bucket still filling or one before the first flow's bucket.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | No | `hyperliquid` (the default and only venue) |
+| `--start` | No | Start time (ISO 8601 or Unix ms); defaults to 24 hours before `--end` |
+| `--end` | No | End time (ISO 8601 or Unix ms); defaults to now |
+| `--kind` | No (`history`) | `deposit`, `withdraw`, `evm_in`, or `evm_out` |
+| `--min-usd` | No (`history`) | Keep flows of at least this many USD, 0 to 1,000,000,000,000 |
+| `--interval` | No (`volume`) | `1m`, `5m`, `15m`, `30m`, `1h` (default), `4h`, `1d` |
+| `--limit` | No | Events or buckets per page, 1 to 1,000 (default 100) |
+| `--cursor` | No | Pagination cursor from the previous response, with the same window and filters |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa positioning current`
+
+The positioning cross-section: every listed perp on Hyperliquid (`--exchange hyperliquid`) or HIP-3 (`--exchange hip3`) over the current trailing window (`--window 1h`, `4h`, or `24h`), sorted by symbol, in one unpaged response. Included with the Build, Pro, Scale and Enterprise plans.
+
+```bash
+oxa positioning current --exchange hyperliquid --window 4h
+oxa positioning current --exchange hip3 --window 24h | jq '.data[] | select(.liqLongUsd > 0) | .symbol'
+```
+
+The window ends at the newest 5-minute close, about 4 minutes behind now, given as `meta.asOf` and each record's `windowEnd`. Each record carries open interest at the start and end of the window (`oiStart`, `oiEnd`, in contracts) and marks (`markStart`, `markEnd`), `null` when that 5-minute bucket has no reading, never 0; taker buy and sell notional (`buyUsd`, `sellUsd`); liquidations (`liqLongUsd`, `liqShortUsd`, `liqLongCount`, `liqShortCount`); and the market's typical move over windows of the same length over about the last 6.9 days (`typicalPrice`, `typicalOi`, `typicalFlow`), `null` under 288 counted windows (`typicalWindows`). Only the current window is served; there is no history.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | Yes | `hyperliquid` or `hip3` |
+| `--window` | Yes | `1h`, `4h`, or `24h` |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
 
 ### `oxa funding current`
 
@@ -1282,6 +1383,12 @@ Errors always go to stderr as one line of structured JSON, never stdout, in ever
 {"error":"The symbol 'NOPE' does not exist. Please see /v1/hyperliquid/instruments for available symbols.","code":2,"type":"validation","error_code":"invalid_symbol","request_id":"7f3c2a9e-1b4d-4c8e-9a61-2d5e8f0b3c17","status":400,"param":"symbol"}
 ```
 
+A request for a dataset the key's plan does not include (`forbidden`, exit code 3) also names the `datatype`, the `required_plans` and the `upgrade_url`:
+
+```json
+{"error":"Trade intent is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.","code":3,"type":"auth","error_code":"forbidden","request_id":"7f3d0700-d5dc-4d00-85e5-a02137e71a4c","status":403,"datatype":"trade_intent","required_plans":["build","pro","scale","enterprise"],"upgrade_url":"https://0xarchive.io/pricing"}
+```
+
 Branch on `error_code`, not on the message text. WebSocket errors from `oxa stream` carry `error_code` the same way.
 
 ## Exit Codes
@@ -1403,6 +1510,14 @@ oxa hip4 trades "$COIN" --recent --limit 50
 oxa breadth current --exchange hyperliquid | jq '.valuePct'
 oxa cvd history --exchange hyperliquid --symbol BTC --interval 1h --limit 24 | jq '[.data[].delta] | add'
 oxa liquidations levels --exchange hyperliquid --symbol BTC --range-pct 5 | jq '{totalLong, totalShort}'
+
+# Build plan and above: who traded, money in and out, trend breadth, and positioning
+oxa trade-intent history --exchange hyperliquid --symbol BTC --start $DAY_AGO --end $NOW \
+  | jq '.data[] | {timestamp, newLongs: .openLong, newShorts: .openShort, stoppedLongs: .stopLong}'
+oxa usdc-flows volume --start $DAY_AGO --end $NOW --interval 1d | jq '.data[].netUsd'
+oxa breadth above-ma current --exchange hyperliquid --n 200 | jq '{valuePct, eligible: .counts.eligible}'
+oxa positioning current --exchange hyperliquid --window 4h \
+  | jq '[.data[] | select(.oiStart != null and .oiEnd != null) | {symbol, oiChange: (.oiEnd - .oiStart)}] | sort_by(.oiChange) | .[-5:]'
 
 # Replay ten minutes of trades as NDJSON
 oxa stream replay trades BTC --start $HOUR_AGO --end $(( HOUR_AGO + 600000 )) --speed 10 \

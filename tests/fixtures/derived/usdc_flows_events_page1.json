@@ -1,0 +1,61 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/usdc-flows",
+    "query": {
+      "start": 1793577600000,
+      "end": 1793581200000,
+      "limit": 3
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "id": "1205759951:16",
+        "timestamp": "2026-11-02T00:00:00.062Z",
+        "timestamp_ms": 1793577600062,
+        "kind": "evm_in",
+        "amount_usd": 0.0001,
+        "fee_usd": 0.0,
+        "user": "0x6b9e773128f453f5c2c60935ee2de2cbc5390a24",
+        "tx_hash": "0x56a02ff1870b6b0358190447de6fcf02027d00d7220e89d5fa68db44460f44ed",
+        "block_number": 1205759951,
+        "event_index": 16
+      },
+      {
+        "id": "1205759951:17",
+        "timestamp": "2026-11-02T00:00:00.062Z",
+        "timestamp_ms": 1793577600062,
+        "kind": "evm_in",
+        "amount_usd": 1e-06,
+        "fee_usd": 0.0,
+        "user": "0x6b9e773128f453f5c2c60935ee2de2cbc5390a24",
+        "tx_hash": "0x0973a68ca09cad7f0aed0447de6fcf02027e00723b9fcc51ad3c51df5f908769",
+        "block_number": 1205759951,
+        "event_index": 17
+      },
+      {
+        "id": "1205759951:18",
+        "timestamp": "2026-11-02T00:00:00.062Z",
+        "timestamp_ms": 1793577600062,
+        "kind": "evm_in",
+        "amount_usd": 1e-06,
+        "fee_usd": 0.0,
+        "user": "0x6b9e773128f453f5c2c60935ee2de2cbc5390a24",
+        "tx_hash": "0xbc471d27ba2deffabdc00447de6fcf02027f000d55210ecc600fc87a7921c9e5",
+        "block_number": 1205759951,
+        "event_index": 18
+      }
+    ],
+    "meta": {
+      "count": 3,
+      "next_cursor": "1793577600062_1205759951_18",
+      "request_id": "1be68a24-6aee-47a7-8684-5207032dcee6",
+      "has_more": true
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

@@ -1,0 +1,27 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/breadth/above-ma/current",
+    "query": {
+      "n": 5
+    },
+    "plan": "free",
+    "version": "2026-10-01"
+  },
+  "status": 403,
+  "body": {
+    "code": 403,
+    "datatype": "breadth_ma",
+    "error": "Moving-average breadth is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.",
+    "error_code": "forbidden",
+    "request_id": "95395338-e5a3-4459-9f1f-e06631af5faa",
+    "required_plans": [
+      "build",
+      "pro",
+      "scale",
+      "enterprise"
+    ],
+    "success": false,
+    "upgrade_url": "https://0xarchive.io/pricing"
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

@@ -1,0 +1,26 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/breadth/above-ma",
+    "query": {
+      "n": 200,
+      "start": 1746057600000,
+      "end": 1746144000000,
+      "interval": "1d"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [],
+    "meta": {
+      "count": 0,
+      "request_id": "6c77d6b7-a033-4527-8e42-48a01d16f7c6",
+      "coverage_from": "2025-10-08T00:00:00Z",
+      "notice": "No data in the requested range. Hyperliquid breadth above the 200-day moving average begins 2025-10-08 00:00 UTC; the requested window ends before then.",
+      "has_more": false
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

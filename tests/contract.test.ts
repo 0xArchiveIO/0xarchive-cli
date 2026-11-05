@@ -366,7 +366,7 @@ describe('API contract 2026-10-01 in the CLI', () => {
     it('asks for the SDK floor on an SDK without capabilities()', async () => {
       sdk.state.clients.capabilities = undefined;
       expect(await runCli('capabilities')).toBe(5);
-      expect(lastError().error).toMatch(/^Support for capabilities requires @0xarchive\/sdk 1\.13\.0 or newer/);
+      expect(lastError().error).toMatch(/^Support for capabilities requires @0xarchive\/sdk 1\.14\.0 or newer/);
     });
   });
 
@@ -479,7 +479,7 @@ describe('API contract 2026-10-01 in the CLI', () => {
     it('asks for the SDK floor for --side on recent trades on an older SDK', async () => {
       delete (sdk.state.clients.lighter.trades as Record<string, unknown>).history;
       expect(await runCli('trades', 'history', '--exchange', 'lighter', '--symbol', 'BTC', '--side', 'buy')).toBe(5);
-      expect(lastError().error).toMatch(/--side on recent trades requires @0xarchive\/sdk 1\.13\.0/);
+      expect(lastError().error).toMatch(/--side on recent trades requires @0xarchive\/sdk 1\.14\.0/);
     });
 
     it('refuses a --side other than buy or sell before any request', async () => {

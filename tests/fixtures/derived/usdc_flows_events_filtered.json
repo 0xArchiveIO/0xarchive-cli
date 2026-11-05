@@ -1,0 +1,87 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/usdc-flows",
+    "query": {
+      "start": 1793577600000,
+      "end": 1793664000000,
+      "min_usd": 1000000,
+      "kind": "withdraw",
+      "limit": 5
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "id": "1205903006:0",
+        "timestamp": "2026-11-02T02:49:53.333Z",
+        "timestamp_ms": 1793587793333,
+        "kind": "withdraw",
+        "amount_usd": 1695639.0,
+        "fee_usd": 1.0,
+        "user": "0x70e8b3627fe9de9adbc13cdffc96f11b91bd6424",
+        "tx_hash": "0x7c8a3b16c2a8713f5eb4fe2b015a593496a1fef8f0d490bb6094c9b8fd9f3ff6",
+        "block_number": 1205903006,
+        "event_index": 0
+      },
+      {
+        "id": "1205927591:0",
+        "timestamp": "2026-11-02T03:18:56.231Z",
+        "timestamp_ms": 1793589536231,
+        "kind": "withdraw",
+        "amount_usd": 1285245.260685,
+        "fee_usd": 1.0,
+        "user": "0xddf4d807478bfb7dd192c392998c3d9d53974ced",
+        "tx_hash": "0x80a663b32d2273f6c0db083d071b5d46d8d4b8dc98f7d53011c0d5d68a9e611e",
+        "block_number": 1205927591,
+        "event_index": 0
+      },
+      {
+        "id": "1206218902:0",
+        "timestamp": "2026-11-02T09:06:07.201Z",
+        "timestamp_ms": 1793610367201,
+        "kind": "withdraw",
+        "amount_usd": 1962073.808965,
+        "fee_usd": 1.0,
+        "user": "0x5b53358eca5790fa4c268ad6813386b3a86549c7",
+        "tx_hash": "0xf46c3854d56060367fbca078380bc7e6b8c47c70856f557196362acf82202b81",
+        "block_number": 1206218902,
+        "event_index": 0
+      },
+      {
+        "id": "1206350706:0",
+        "timestamp": "2026-11-02T11:44:43.484Z",
+        "timestamp_ms": 1793619883484,
+        "kind": "withdraw",
+        "amount_usd": 1199999.0,
+        "fee_usd": 1.0,
+        "user": "0xab11bfc2e491378b79675dc3e996ed01ea034d5f",
+        "tx_hash": "0x4936ec57254f6d1327b61d5132af663247fc50a4eb026770366e7dac1a8c673a",
+        "block_number": 1206350706,
+        "event_index": 0
+      },
+      {
+        "id": "1206355300:3",
+        "timestamp": "2026-11-02T11:50:17.054Z",
+        "timestamp_ms": 1793620217054,
+        "kind": "withdraw",
+        "amount_usd": 1878631.944094,
+        "fee_usd": 1.0,
+        "user": "0xec4a6f59960fb55a7fa49262e2628687b322cf62",
+        "tx_hash": "0x6eb205d1246b60090904aec8957bf01ee6a2fb4bc333c09fa67b5f98743c0e0e",
+        "block_number": 1206355300,
+        "event_index": 3
+      }
+    ],
+    "meta": {
+      "count": 5,
+      "next_cursor": "1793620217054_1206355300_3",
+      "request_id": "b3a29df6-4bb3-46bc-9da9-d3dc17045f47",
+      "has_more": true
+    }
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

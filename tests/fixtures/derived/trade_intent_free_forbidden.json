@@ -1,0 +1,25 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/trade-intent/BTC",
+    "query": {},
+    "plan": "free",
+    "version": "2026-10-01"
+  },
+  "status": 403,
+  "body": {
+    "code": 403,
+    "datatype": "trade_intent",
+    "error": "Trade intent is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.",
+    "error_code": "forbidden",
+    "request_id": "7f3d0700-d5dc-4d00-85e5-a02137e71a4c",
+    "required_plans": [
+      "build",
+      "pro",
+      "scale",
+      "enterprise"
+    ],
+    "success": false,
+    "upgrade_url": "https://0xarchive.io/pricing"
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

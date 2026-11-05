@@ -1,0 +1,25 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/usdc-flows",
+    "query": {},
+    "plan": "free",
+    "version": "2026-10-01"
+  },
+  "status": 403,
+  "body": {
+    "code": 403,
+    "datatype": "usdc_flows",
+    "error": "USDC flow data is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.",
+    "error_code": "forbidden",
+    "request_id": "03b59458-0e6a-4201-ac92-7d10295dc92c",
+    "required_plans": [
+      "build",
+      "pro",
+      "scale",
+      "enterprise"
+    ],
+    "success": false,
+    "upgrade_url": "https://0xarchive.io/pricing"
+  },
+  "recorded": "2026-11-04 against a staging deployment of the production API build with the four datasets served"
+}

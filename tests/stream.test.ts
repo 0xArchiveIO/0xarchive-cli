@@ -590,7 +590,7 @@ describe.skipIf(CHANNEL_TABLE)('oxa stream on an SDK older than the floor', () =
     () => streamGenericCommand('l4_diffs', 'BTC', { format: 'json' }),
   ])('asks for the SDK release with the channel table (%#)', async (run) => {
     await expect(Promise.resolve().then(run)).rejects.toMatchObject({ code: 5 });
-    expect(stderrPayloads().at(-1)?.error).toMatch(/requires @0xarchive\/sdk 1\.13\.0 or newer/);
+    expect(stderrPayloads().at(-1)?.error).toMatch(/requires @0xarchive\/sdk 1\.14\.0 or newer/);
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 });
