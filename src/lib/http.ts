@@ -113,6 +113,8 @@ export class ApiHttpClient {
           'Content-Type': 'application/json',
           [API_VERSION_HEADER]: API_VERSION,
         },
+        // Never replay X-API-Key to another origin on a 3xx.
+        redirect: 'error',
         signal: controller.signal,
       });
 
