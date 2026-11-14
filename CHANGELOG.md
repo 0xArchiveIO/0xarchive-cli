@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.1 - 2026-11-14
+
+### Changed
+
+- Requires `@0xarchive/sdk` 1.15.0 or newer. With 1.15.0 a time the API does not know (a market summary's `timestamp`, trigger levels' `asOf`, a current order book's `timestamp`, an L4 snapshot's `timestamp`) reads as missing instead of failing to parse. Output is unchanged: the pretty view leaves a missing time out, and `--format json` passes it through as `null`.
+
 ## 1.12.0 - 2026-11-05
 
 ### Added

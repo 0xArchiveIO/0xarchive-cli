@@ -127,7 +127,7 @@ import {
 import { capabilitiesCommand } from './commands/capabilities.js';
 import { exitError, EXIT } from './lib/output.js';
 
-const VERSION = '1.12.0';
+const VERSION = '1.12.1';
 
 const EXCHANGE_DESC =
   'Exchange: hyperliquid, hip3, hip4, lighter, or rh-lighter. ' +

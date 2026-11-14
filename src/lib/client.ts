@@ -55,11 +55,12 @@ export function exchangeLabel(exchange: string): string {
 }
 
 // The oldest @0xarchive/sdk release with the Robinhood Chain client, the
-// positions resources, Lighter liquidations, the `mempool` channel, and the
+// positions resources, Lighter liquidations, the `mempool` channel, the
 // Build-and-above datasets (trade intent, USDC flows, breadth above the n-day
-// moving average, and positioning). package.json pins it as the floor; this
-// message covers a stale install that predates the floor.
-export const SDK_FLOOR = '1.14.0';
+// moving average, and positioning), and data times that read as missing when
+// the API does not know them. package.json pins it as the floor; this message
+// covers a stale install that predates the floor.
+export const SDK_FLOOR = '1.15.0';
 
 export function sdkTooOld(feature: string): never {
   exitError(
