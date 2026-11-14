@@ -518,7 +518,7 @@ describe('Build-and-above datasets', () => {
       remove(sdk.state.clients);
       expect(await runCli(...args)).toBe(5);
       expect(lastError().error).toBe(
-        `Support for ${feature} requires @0xarchive/sdk 1.14.0 or newer. Reinstall @0xarchive/cli to pick it up.`,
+        `Support for ${feature} requires @0xarchive/sdk 1.15.0 or newer. Reinstall @0xarchive/cli to pick it up.`,
       );
     });
   });
