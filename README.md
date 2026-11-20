@@ -57,9 +57,13 @@ oxa auth test
 oxa capabilities --exchange hip3 --format pretty
 
 # Time windows used by the examples in this README, in Unix milliseconds,
-# relative to now so they stay inside every plan's history window (Free keeps
-# the most recent 30 days)
+# relative to now so they stay inside Free's 30-day history window. From
+# November 23, 2026, after an account's first 30 days, Free data runs through
+# yesterday (UTC): on such an account, use the second NOW line, which ends the
+# windows before today, and see Plans and Data Access for the commands that
+# always read now.
 NOW=$(( $(date +%s) * 1000 ))
+# NOW=$(( $(date +%s) / 86400 * 86400 * 1000 - 1 ))   # Free after the first 30 days
 HOUR_AGO=$(( NOW - 3600000 ))
 DAY_AGO=$(( NOW - 86400000 ))
 WEEK_AGO=$(( NOW - 604800000 ))
@@ -155,6 +159,10 @@ Every command below works on every plan, including Free, with these exceptions:
 
 - The live `mempool` stream (`oxa stream subscribe mempool`) is included with the Pro, Scale and Enterprise plans.
 - Four datasets are included with the Build, Pro, Scale and Enterprise plans: trade intent (`oxa trade-intent`), USDC flows (`oxa usdc-flows`), breadth above the n-day moving average (`oxa breadth above-ma`), and positioning (`oxa positioning`). On Free, the API answers `forbidden` and the CLI exits with code 3; the error line names the `datatype`, the `required_plans` and the `upgrade_url`.
+- From November 23, 2026, after an account's first 30 days (counted from sign-up), Free data runs through yesterday (UTC): today's data and live streams need Build, and replays of past days stay on Free. In its first 30 days an account keeps today's data.
+  - A command whose window reaches into today is answered with `forbidden` before it is charged, and the CLI exits with code 3. That is an `--end` or `--timestamp` at or after today's 00:00 UTC, a range without `--end` (it ends now), and every command that reads now: `orderbook get` without `--timestamp`, `funding current`, `oi current`, `summary`, recent trades, and positions without a time. The message names the last day Free serves (the latest instant is 23:59:59.999 UTC on that day), and the error line names the `required_plans` and the `upgrade_url`.
+  - `oxa stream subscribe` is refused with `forbidden` (exit code 3), and so is an `oxa stream replay` whose `--end` is at or after today's 00:00 UTC.
+  - Instrument and pair lists, HIP-4 outcomes and questions, `freshness` and `auth test` are never refused.
 
 Apart from these, Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
 
@@ -1051,7 +1059,7 @@ Both carry the source `blockNumber`, and `timestamp` as an RFC 3339 string with 
 
 Explicit Spot command surface. Symbols are dashed canonical (`HYPE-USDC`, `PURR-USDC`); the server resolves the dashed form to Hyperliquid's wire formats (`PURR/USDC`, `@107`) internally. Spot has no funding, open interest, or liquidations; candles are served through the dedicated Spot route. Pairs and TWAP statuses are Spot only and live here. The Spot market data is also served by the shared datatypes with `--exchange spot`: `oxa orderbook get|history`, `oxa trades history`, `oxa candles history`, `oxa l4 get|diffs|history`, `oxa orders history`, `oxa freshness get`, and `oxa instruments list`.
 
-Coverage (`oxa capabilities --exchange spot`): candles from 2025-03-22 10:50 UTC, with `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, and `1w` intervals and a maximum limit of 1000; trades from 2025-03-22 10:50:22 UTC; TWAP statuses from 2026-05-05 13:05 UTC; order book from 2026-05-05 19:56 UTC; L4 diffs and checkpoints from 2026-05-05 22:57 UTC (PURR-USDC from 2026-03-11 01:03 UTC), with order history reaching back further. `oxa spot pairs` lists the current pairs. Every Spot route is available on every plan, including Free; on Free, history is limited to the most recent rolling 30 days (see [Plans and Data Access](#plans-and-data-access)).
+Coverage (`oxa capabilities --exchange spot`): candles from 2025-03-22 10:50 UTC, with `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, and `1w` intervals and a maximum limit of 1000; trades from 2025-03-22 10:50:22 UTC; TWAP statuses from 2026-05-05 13:05 UTC; order book from 2026-05-05 19:56 UTC; L4 diffs and checkpoints from 2026-05-05 22:57 UTC (PURR-USDC from 2026-03-11 01:03 UTC), with order history reaching back further. `oxa spot pairs` lists the current pairs. Every Spot route is available on every plan, including Free; on Free, history is limited to the most recent rolling 30 days and, from November 23, 2026, after an account's first 30 days, runs through yesterday (UTC) (see [Plans and Data Access](#plans-and-data-access)).
 
 ```bash
 # Discovery
@@ -1102,7 +1110,7 @@ oxa stream trades HYPE-USDC --exchange spot --duration-ms 60000
 
 ### `oxa stream ...` (realtime WebSocket)
 
-Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free; the `mempool` channel is included with the Pro, Scale and Enterprise plans. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`, and `mempool` connects to `wss://stream.0xarchive.io/ws`, the only endpoint that serves it. Live streams and replays run on the SDK's WebSocket client, which connects with the `ws` package in Node.js. They work on Node.js 18 or later, and large messages, such as the L4 snapshot of a deep book, arrive intact.
+Stream live market data over a single WebSocket subscription, or replay stored data with `oxa stream replay` (see [Replay](#replay)). Output is NDJSON on stdout (one JSON record per line) by default; `--format pretty` adds a one-line summary per event. WebSocket streaming is available on every plan, including Free; the `mempool` channel is included with the Pro, Scale and Enterprise plans. From November 23, 2026, after an account's first 30 days, Free live streams need Build, and a Free replay must end before today's 00:00 UTC. Connection counts, subscription caps, and replay speed scale with plan; on Free, replay is limited to the most recent rolling 30 days with a maximum 30-day span per replay (see [Plans and Data Access](#plans-and-data-access)). Each `oxa stream` process opens one WebSocket connection, which counts toward your plan's connection limit; the default endpoint is `wss://api.0xarchive.io/ws`, and `mempool` connects to `wss://stream.0xarchive.io/ws`, the only endpoint that serves it. Live streams and replays run on the SDK's WebSocket client, which connects with the `ws` package in Node.js. They work on Node.js 18 or later, and large messages, such as the L4 snapshot of a deep book, arrive intact.
 
 ```bash
 # Realtime liquidations (Hyperliquid; pass `--exchange hip3` for HIP-3 builder perps)
@@ -1175,7 +1183,7 @@ Live subscriptions are available for four Lighter channels on each deployment:
 
 `lighter_candles`, `lighter_l3_orderbook`, and `rh_lighter_candles` support historical replay only; the CLI rejects them before opening a socket and points to `oxa candles history --exchange lighter|rh-lighter` and `oxa lighter l3 get` / `oxa lighter l3 history`. Robinhood Chain has no L3 channel.
 
-Lighter live data, for both deployments, is served on `wss://api.0xarchive.io/ws`, the CLI default. It is available on every plan, and every live Lighter message is metered per message, the same as Hyperliquid live data. `stream.0xarchive.io` carries a subset of Hyperliquid live channels and no Lighter channels; a Lighter subscribe there returns an error pointing to `wss://api.0xarchive.io/ws`.
+Lighter live data, for both deployments, is served on `wss://api.0xarchive.io/ws`, the CLI default. It is available on every plan (from November 23, 2026, after an account's first 30 days, Free live streams need Build), and every live Lighter message is metered per message, the same as Hyperliquid live data. `stream.0xarchive.io` carries a subset of Hyperliquid live channels and no Lighter channels; a Lighter subscribe there returns an error pointing to `wss://api.0xarchive.io/ws`.
 
 The `rh_lighter_*` channels send exactly the same message shapes as the matching `lighter_*` channels below, with Robinhood Chain symbols and USDG-quoted prices. Everything in this section applies to both deployments, including `--interval-ms` on the book channel and drop notices.
 
@@ -1255,7 +1263,7 @@ oxa stream replay lighter_orderbook ETH --start $HOUR_AGO --end $(( HOUR_AGO + 6
 | `--url` | No | Override the WebSocket URL (or set `OXA_WS_URL`) |
 | `--format` | No | `json` (NDJSON, default) or `pretty` |
 
-Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`, `mempool`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history where there is one. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
+Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`, `mempool`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history where there is one. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span; from November 23, 2026, after an account's first 30 days, a Free replay must end before today's 00:00 UTC.
 
 ### `oxa webhooks ...`
 
@@ -1387,6 +1395,12 @@ A request for a dataset the key's plan does not include (`forbidden`, exit code 
 
 ```json
 {"error":"Trade intent is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.","code":3,"type":"auth","error_code":"forbidden","request_id":"7f3d0700-d5dc-4d00-85e5-a02137e71a4c","status":403,"datatype":"trade_intent","required_plans":["build","pro","scale","enterprise"],"upgrade_url":"https://0xarchive.io/pricing"}
+```
+
+From November 23, 2026, a Free account past its first 30 days that asks for today's data gets the same kind of line, without a `datatype`; the message names the last day Free serves (see [Plans and Data Access](#plans-and-data-access)):
+
+```json
+{"error":"Free data runs through yesterday: the latest instant Free serves is 2026-11-22T23:59:59.999Z. Today's data and live streams need Build. Upgrade at https://0xarchive.io/pricing.","code":3,"type":"auth","error_code":"forbidden","request_id":"5b0e6c2a-8f41-4d7e-b3a9-0c6d2e1f4a58","status":403,"required_plans":["build","pro","scale","enterprise"],"upgrade_url":"https://0xarchive.io/pricing"}
 ```
 
 Branch on `error_code`, not on the message text. WebSocket errors from `oxa stream` carry `error_code` the same way.
