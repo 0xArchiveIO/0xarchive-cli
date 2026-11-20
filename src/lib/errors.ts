@@ -103,7 +103,10 @@ export function apiErrorFields(error: OxArchiveError): ApiErrorFields {
   const validValues = stringList(e.validValues);
   // A plan refusal names the datatype, the plans that include it and where to
   // upgrade. The SDK's PlanRequiredError carries them as properties; an older
-  // SDK keeps them in the error body.
+  // SDK keeps them in the error body. A refusal of today's data on Free (from
+  // 2026-11-23, after an account's first 30 days) names no datatype; it says
+  // why in `reason` (`today_needs_build`) and the last day served in
+  // `data_ends_on`, which the SDK keeps in the error body only.
   const body = (e.body && typeof e.body === 'object' ? e.body : {}) as Record<string, unknown>;
   const requiredPlans = stringList(e.requiredPlans ?? body.requiredPlans ?? body.required_plans);
   return {
@@ -116,6 +119,8 @@ export function apiErrorFields(error: OxArchiveError): ApiErrorFields {
     param: stringOrUndefined(e.param),
     valid_values: validValues,
     datatype: requiredPlans ? stringOrUndefined(e.datatype ?? body.datatype) : undefined,
+    reason: requiredPlans ? stringOrUndefined(body.reason) : undefined,
+    data_ends_on: requiredPlans ? stringOrUndefined(body.dataEndsOn ?? body.data_ends_on) : undefined,
     required_plans: requiredPlans,
     upgrade_url: requiredPlans
       ? stringOrUndefined(e.upgradeUrl ?? body.upgradeUrl ?? body.upgrade_url)

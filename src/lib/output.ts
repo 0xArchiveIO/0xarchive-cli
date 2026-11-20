@@ -48,6 +48,10 @@ export interface ApiErrorFields {
   valid_values?: string[];
   /** On a plan refusal (`forbidden`): the datatype the plan does not include. */
   datatype?: string;
+  /** On a plan refusal: why, when the API says (`today_needs_build` when Free asks for today's data). */
+  reason?: string;
+  /** On a refusal of today's data on Free: the last day Free serves, `YYYY-MM-DD` (UTC). */
+  data_ends_on?: string;
   /** On a plan refusal: the plans that include the datatype, e.g. `["build", "pro", "scale", "enterprise"]`. */
   required_plans?: string[];
   /** On a plan refusal: where to upgrade. */

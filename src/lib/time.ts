@@ -25,14 +25,17 @@ export function parseTimestamp(value: string, label: string): number {
 
 /**
  * `--start ... --end ...` for a usage example in a message: a window that
- * opens at midnight UTC yesterday, so the example falls inside every plan's
- * history window whenever it is printed.
+ * opens at midnight UTC yesterday and ends before midnight UTC today, so the
+ * example falls inside every plan's history window whenever it is printed,
+ * including Free's after an account's first 30 days, when Free data runs
+ * through yesterday (UTC).
  */
 export function exampleRange(hours: number): string {
   const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const startMs = Date.parse(`${day}T00:00:00Z`);
+  const endMs = Math.min(startMs + hours * 3_600_000, startMs + 86_400_000 - 1_000);
   const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z');
-  return `--start ${iso(startMs)} --end ${iso(startMs + hours * 3_600_000)}`;
+  return `--start ${iso(startMs)} --end ${iso(endMs)}`;
 }
 
 /**
