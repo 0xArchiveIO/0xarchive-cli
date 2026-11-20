@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A `forbidden` error line for today's data on Free names the `reason` (`today_needs_build`) and `data_ends_on`, the last day Free serves (`YYYY-MM-DD`, UTC), beside the `required_plans` and the `upgrade_url`. From November 23, 2026, after an account's first 30 days, Free data runs through yesterday (UTC), and a request that reaches into today is refused this way before it is charged.
+
+### Fixed
+
+- The example ranges in usage messages (for example after `oxa trades history --exchange hyperliquid` without a range) end at 23:59:59 UTC yesterday instead of 00:00 UTC today, so they stay inside Free's data, which from November 23, 2026 runs through yesterday after an account's first 30 days.
+
 ## 1.12.1 - 2026-11-14
 
 ### Changed
