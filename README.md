@@ -1264,6 +1264,35 @@ oxa stream replay lighter_orderbook ETH --start $HOUR_AGO --end $(( HOUR_AGO + 6
 
 Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`, `mempool`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history where there is one. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
 
+### `oxa bench` (measure Stream from your machine)
+
+Measure 0xArchive Stream against Hyperliquid's own public WebSocket from your own machine. `oxa bench` opens both feeds side by side in one process, subscribes them to the same Hyperliquid perp coins, and matches every trade on coin and trade id. Both receipt times come from the same clock, so the head start needs no clock sync.
+
+```bash
+oxa bench                                   # BTC, ETH, SOL and HYPE for 120 s, readable summary
+oxa bench --duration 600                    # 10 minutes
+oxa bench --coins BTC,ETH --book            # add the L4 book check after the race
+oxa bench --json > bench.json               # one JSON document with every figure
+```
+
+What it reports:
+
+- **Matched trades** and how often **Stream arrived first**, with the head start at p10, p50, p90 and p99 (Hyperliquid's receipt time minus Stream's; positive means Stream was first).
+- **Identical payloads**: matched trades whose price, size, trade time and transaction hash agree on both feeds.
+- **Seen on one feed only**: trades the other feed did not deliver within 10 seconds. **Arrived late** counts those whose copy came later, within 2 minutes. A trade that goes missing while a feed is down, or in the first 15 seconds after it connects, is listed as not counted instead of being counted against that feed.
+- **Block to arrival** on both feeds: receipt time minus Hyperliquid's trade time. This reads your machine's clock, so the summary shows the clock's error bound when chrony or systemd-timesyncd reports one.
+- **Reconnects** and the share of the run each connection was open.
+
+It also times Stream's L4 order book diffs from block to arrival (`--no-l4` skips this). `--book` then rebuilds Stream's L4 book from its snapshot and diffs, one coin at a time for `--book-seconds` (default 60), and compares it with Hyperliquid's own `l2Book`: price, total size and order count on each of the top 20 levels per side. A match shows the rebuilt book agrees with the venue at the level detail the venue publishes; Hyperliquid publishes no per-order book to compare individual orders with.
+
+Connections and access:
+
+- The race holds two Stream connections at once, one for trades and one for L4 diffs (one with `--no-l4`), and the book check then uses one. They count toward your plan's connection limit. Before the race starts, `oxa bench` checks that your account can open them; when the limit is already taken by other sessions, it exits with code 4 and names the limit.
+- Your API key goes only to the Stream endpoint and is never printed. A refused key exits with code 3 before the race starts.
+- Stream serves live data only. On Free, from November 23, 2026, after an account's first 30 days, live data needs Build: Stream refuses the connection and `oxa bench` exits with code 3 with the reason.
+- Hyperliquid's feed is `wss://api.hyperliquid.xyz/ws` and Stream is `wss://stream.0xarchive.io/ws`. Override them with `--hl-url` and `--stream-url`.
+- `oxa bench` needs Node.js 22 or newer for its built-in WebSocket client.
+
 ### `oxa webhooks ...`
 
 Webhooks push events to a URL of yours instead of being polled: liquidations, fills and transfers on wallets you watch, oracle moves, settlements, export jobs finishing, and the rest of the catalog. Deliveries are signed, retried, and logged. Three objects make a working integration: an **endpoint** (your URL plus the signing secret deliveries are signed with), a **subscription** (one event type and configuration, delivered to one endpoint), and a **watched wallet** (an address in scope for address-scoped events such as `account.fill`).
