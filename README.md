@@ -665,6 +665,10 @@ oxa positions get --exchange hyperliquid --address 0xYourWallet --timestamp $HOU
 oxa positions history --exchange lighter --account 42 --start $DAY_AGO --end $NOW
 oxa positions changes --exchange hyperliquid --address 0xYourWallet --start $DAY_AGO --end $NOW --symbol BTC
 
+# Funding a wallet paid or received (Hyperliquid and HIP-3, at most 31 days per request)
+oxa positions funding-payments --exchange hyperliquid --address 0xYourWallet --start $DAY_AGO --end $NOW --symbol BTC
+oxa positions funding-payments --exchange hip3 --address 0xYourWallet --dex xyz --start $DAY_AGO --end $NOW
+
 # Every open position in one market, largest first, with totals on the first page
 oxa positions market --exchange hyperliquid --symbol BTC --side long --min-value 1000000
 oxa positions market --exchange lighter --symbol ETH --hour $LAST_HOUR
@@ -686,6 +690,7 @@ oxa positions account-history --exchange hyperliquid --address 0xYourWallet --st
 | `oxa positions get` | all four | Open positions at the latest snapshot or as of `--timestamp`, plus the account summary on the first page of a snapshot read: on Hyperliquid always, on HIP-3 with `--dex` (or a dex-prefixed `--symbol`), and on Lighter the account's position totals when no `--symbol` is set. Filters: `--symbol`, `--dex` (HIP-3). |
 | `oxa positions history` | all four | Hourly position snapshots in `[--start, --end)`. Filters: `--symbol`, `--dex` (HIP-3); `--limit`, `--cursor`. |
 | `oxa positions changes` | all four | Change log: every fill leg on the position, with the size before and after, the entry price after, realized PnL, and fees, in `[--start, --end)`. On Lighter, a leg that leaves the size unchanged is included too, with `eventType` `settlement` (the settled side of a market settlement) or `unchanged`. |
+| `oxa positions funding-payments` | `hyperliquid`, `hip3` | The funding one wallet paid or received: one row per position per hourly settlement, in `[--start, --end)`. `fundingAmount` is positive when the wallet received funding and negative when it paid. At most 31 days per request; page through a longer history one window at a time, and follow `nextCursor` with unchanged flags. Filters: `--symbol` (HIP-3: `dex:COIN`), `--dex` (HIP-3); `--limit` (default 500, max 5,000), `--cursor`. Lighter has no wallet funding payments. Billed at one credit per 1,000 rows, with a minimum of one credit per request. |
 | `oxa positions market` | all four | Every open position in one `--symbol`, sorted by position value, at the latest snapshot or at `--hour`. Filters: `--side long` or `--side short`, `--min-value <usd>`, `--include-system` (Lighter). |
 | `oxa positions summary` | all four | Long and short counts, sizes, values, average entries, and top-10 share for one `--symbol`: the latest snapshot, or hourly over `--start`/`--end`. |
 | `oxa positions all` | all four | Every open position across markets at one `--hour` (an exact UTC hour). |
@@ -700,6 +705,8 @@ Coverage:
 | HIP-3 (`hip3`) | 2025-10-13 | 2026-06-07 | every 5 minutes |
 | Lighter mainnet (`lighter`) | 2025-01-17 | 2025-01-17 | every 2 minutes |
 | Lighter on Robinhood Chain (`rh-lighter`) | 2026-06-26 | 2026-06-26 | every 2 minutes |
+
+Wallet funding payments start at 2025-09-27 10:00 UTC on Hyperliquid and 2025-10-13 13:00 UTC on HIP-3. A window that ends before that returns no rows, with `meta.coverageFrom` and `meta.notice`.
 
 How to read the results:
 
