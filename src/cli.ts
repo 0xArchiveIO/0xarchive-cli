@@ -117,6 +117,7 @@ import {
   positionsGetCommand,
   positionsHistoryCommand,
   positionsChangesCommand,
+  positionsFundingPaymentsCommand,
   positionsMarketCommand,
   positionsSummaryCommand,
   positionsAllCommand,
@@ -125,6 +126,7 @@ import {
   accountsByL1Command,
 } from './commands/positions.js';
 import { capabilitiesCommand } from './commands/capabilities.js';
+import { benchCommand } from './commands/bench.js';
 import { exitError, EXIT } from './lib/output.js';
 
 const VERSION = '1.12.1';
@@ -198,6 +200,29 @@ program
   .option('--api-key <key>', 'API key (optional; or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty (table)', 'json')
   .action(capabilitiesCommand);
+
+// ── oxa bench ───────────────────────────────────────────────────────────
+
+program
+  .command('bench')
+  .description(
+    "Measure 0xArchive Stream against Hyperliquid's own public WebSocket from this machine: race them for the " +
+      'same trades, matched on coin and trade id. Reports how often Stream arrived first and by ' +
+      'how much, whether both copies are identical, trades only one feed delivered, block-to-arrival times and ' +
+      "Stream's L4 order book diffs. --book also rebuilds Stream's L4 book and compares it with " +
+      "Hyperliquid's own top 20 levels. The API key goes only to 0xArchive and is never printed.",
+  )
+  .option('--coins <list>', 'Comma-separated Hyperliquid perp coins, up to 10 (default BTC,ETH,SOL,HYPE)')
+  .option('--duration <seconds>', 'How long to race, 10 to 3600 seconds', '120')
+  .option('--no-l4', "Skip timing Stream's L4 order book diffs (the race then uses one Stream connection instead of two)")
+  .option('--book', "After the race, compare Stream's rebuilt L4 book with Hyperliquid's top 20 levels, one coin at a time")
+  .option('--book-seconds <seconds>', 'Seconds of book check per coin, 10 to 300 (Hyperliquid publishes its book every few seconds)', '60')
+  .option('--stream-url <url>', 'Stream WebSocket for Hyperliquid (default wss://stream.0xarchive.io/ws)')
+  .option('--hl-url <url>', "Hyperliquid's WebSocket (default wss://api.hyperliquid.xyz/ws)")
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: pretty (summary) or json', 'pretty')
+  .option('--json', 'Same as --format json')
+  .action(benchCommand);
 
 // ── oxa orderbook get ───────────────────────────────────────────────────
 
@@ -1555,6 +1580,24 @@ positions
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(positionsChangesCommand);
+
+positions
+  .command('funding-payments')
+  .description(
+    'Get the funding a wallet paid or received: one row per position per hourly settlement, fundingAmount positive when received and negative when paid, at most 31 days per request (hyperliquid, hip3)',
+  )
+  .requiredOption('--exchange <exchange>', 'Exchange: hyperliquid or hip3 (Lighter has no wallet funding payments)')
+  .requiredOption('--address <address>', 'Wallet address, 0x...')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms), inclusive')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms), exclusive; at most 31 days after --start')
+  .option('--symbol <symbol>', 'Only this market (HIP-3: dex:COIN)')
+  .option('--dex <dex>', 'HIP-3 only: restrict to one dex')
+  .option('--limit <n>', 'Maximum records to return (default 500, max 5000)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (repeat the same other flags)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(positionsFundingPaymentsCommand);
 
 positions
   .command('market')

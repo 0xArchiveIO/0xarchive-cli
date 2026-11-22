@@ -32,6 +32,7 @@ import { handleError } from '../lib/errors.js';
 import { parseLimit, parseTimestamp } from '../lib/time.js';
 import { writeOutputFile } from '../lib/file.js';
 import { printNextPage } from '../lib/emit.js';
+import { FUNDING_PAYMENTS_EXCHANGES, WalletFundingClient } from '../lib/funding-payments.js';
 import {
   ACCOUNT_EXCHANGES,
   POSITIONS_EXCHANGES,
@@ -457,6 +458,74 @@ export async function positionsHistoryCommand(options: PositionsRangeOptions): P
 
 export async function positionsChangesCommand(options: PositionsRangeOptions): Promise<void> {
   return rangeCommand(options, 'changes');
+}
+
+// ── oxa positions funding-payments (Hyperliquid, HIP-3) ──────────────────
+
+export type PositionsFundingPaymentsOptions = Omit<PositionsRangeOptions, 'account'>;
+
+function fundingPaymentsExchange(raw: string): 'hyperliquid' | 'hip3' {
+  const exchange = validateExchange(raw);
+  if (!(FUNDING_PAYMENTS_EXCHANGES as readonly string[]).includes(exchange)) {
+    exitError(
+      `${exchangeLabel(exchange)} has no wallet funding payments endpoint. ` +
+        `Use --exchange ${listOr(FUNDING_PAYMENTS_EXCHANGES)}.`,
+      EXIT.VALIDATION,
+    );
+  }
+  return exchange as 'hyperliquid' | 'hip3';
+}
+
+export async function positionsFundingPaymentsCommand(options: PositionsFundingPaymentsOptions): Promise<void> {
+  const format = validateFormat(options.format);
+  const exchange = fundingPaymentsExchange(options.exchange);
+  if (options.address === undefined) {
+    exitError(
+      `${exchangeLabel(exchange)} funding payments are keyed by wallet address. Pass --address 0x...`,
+      EXIT.VALIDATION,
+    );
+  }
+  const address = parseAddress(options.address, 'address');
+  const dex = parseDex(exchange, options.dex);
+  const { start, end } = parseRange(options.start, options.end);
+  const limit = parseLimit(options.limit);
+  const apiKey = resolveApiKey(options.apiKey);
+  const client = new WalletFundingClient(apiKey);
+
+  try {
+    const result = await client.payments(
+      exchange,
+      address,
+      compact({ start, end, symbol: options.symbol, dex, cursor: options.cursor, limit }),
+    );
+    const page = toEnvelope(result);
+    emit(page, { format, out: options.out }, { exchange }, () => {
+      const data = rows(page.data);
+      prettyHeader(`Funding payments for ${shortAddress(address)} (${exchangeLabel(exchange)}): ${data.length} records`);
+      printMeta(page.meta);
+      if (data.length === 0) {
+        prettyDim('No funding payments in this window.');
+        return;
+      }
+      process.stdout.write('\n');
+      const preview = data.slice(0, 20);
+      prettyTable(
+        ['Timestamp', 'Symbol', 'Position', 'Rate', 'Amount', 'Direction'],
+        preview.map((p) => [
+          text(field(p, 'timestamp')),
+          text(field(p, 'symbol', 'coin')),
+          text(field(p, 'positionSize', 'position_size')),
+          text(field(p, 'fundingRate', 'funding_rate')),
+          text(field(p, 'fundingAmount', 'funding_amount')),
+          text(field(p, 'direction')),
+        ]),
+      );
+      printMore(page, preview.length, data.length);
+    });
+    process.exit(EXIT.SUCCESS);
+  } catch (error) {
+    handleError(error, apiKey);
+  }
 }
 
 // ── oxa positions market ────────────────────────────────────────────────
