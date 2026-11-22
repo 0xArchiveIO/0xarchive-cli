@@ -117,6 +117,7 @@ import {
   positionsGetCommand,
   positionsHistoryCommand,
   positionsChangesCommand,
+  positionsFundingPaymentsCommand,
   positionsMarketCommand,
   positionsSummaryCommand,
   positionsAllCommand,
@@ -1555,6 +1556,24 @@ positions
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(positionsChangesCommand);
+
+positions
+  .command('funding-payments')
+  .description(
+    'Get the funding a wallet paid or received: one row per position per hourly settlement, fundingAmount positive when received and negative when paid, at most 31 days per request (hyperliquid, hip3)',
+  )
+  .requiredOption('--exchange <exchange>', 'Exchange: hyperliquid or hip3 (Lighter has no wallet funding payments)')
+  .requiredOption('--address <address>', 'Wallet address, 0x...')
+  .requiredOption('--start <time>', 'Start time (ISO 8601 or Unix ms), inclusive')
+  .requiredOption('--end <time>', 'End time (ISO 8601 or Unix ms), exclusive; at most 31 days after --start')
+  .option('--symbol <symbol>', 'Only this market (HIP-3: dex:COIN)')
+  .option('--dex <dex>', 'HIP-3 only: restrict to one dex')
+  .option('--limit <n>', 'Maximum records to return (default 500, max 5000)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (repeat the same other flags)')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(positionsFundingPaymentsCommand);
 
 positions
   .command('market')

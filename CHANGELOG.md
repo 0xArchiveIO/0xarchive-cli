@@ -5,9 +5,11 @@
 ### Added
 
 - A `forbidden` error line for today's data on Free names the `reason` (`today_needs_build`) and `data_ends_on`, the last day Free serves (`YYYY-MM-DD`, UTC), beside the `required_plans` and the `upgrade_url`. From November 23, 2026, after an account's first 30 days, Free data runs through yesterday (UTC), and a request that reaches into today is refused this way before it is charged.
+- `oxa positions funding-payments --exchange hyperliquid|hip3 --address <wallet> --start <time> --end <time>`: the funding one wallet paid or received, one row per position per hourly settlement, with the position size, the funding rate, and `fundingAmount` (positive when received, negative when paid). At most 31 days per request; follow `nextCursor` with `--cursor` and unchanged flags. Filters: `--symbol` (HIP-3: `dex:COIN`) and `--dex` (HIP-3); `--limit` defaults to 500, up to 5,000. Served from 2025-09-27 10:00 UTC on Hyperliquid and from 2025-10-13 13:00 UTC on HIP-3. Billed at one credit per 1,000 rows, with a minimum of one credit per request. `--exchange lighter` and `rh-lighter` exit with code 2 before any request: Lighter has no wallet funding payments.
 
 ### Fixed
 
+- A plan refusal (`forbidden`) from the HIP-4 commands, `oxa spot candles` and `oxa positions funding-payments` names the `required_plans` and the `upgrade_url` (and, for today's data on Free, the `reason` and `data_ends_on`) on the stderr JSON line, as every other command does.
 - The example ranges in usage messages (for example after `oxa trades history --exchange hyperliquid` without a range) end at 23:59:59 UTC yesterday instead of 00:00 UTC today, so they stay inside Free's data, which from November 23, 2026 runs through yesterday after an account's first 30 days.
 
 ## 1.12.1 - 2026-11-14
