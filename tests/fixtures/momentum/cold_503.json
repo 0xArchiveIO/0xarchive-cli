@@ -4,7 +4,7 @@
     "query": {
       "lookback": "7d"
     },
-    "plan": "pro",
+    "plan": "enterprise",
     "version": "2026-10-01"
   },
   "status": 503,
@@ -12,8 +12,9 @@
     "code": 503,
     "error": "The momentum factor is still being prepared. Retry in a few seconds.",
     "error_code": "upstream_unavailable",
-    "request_id": "7e7e7e7e-8888-4999-8aaa-bbbbccccdddd",
+    "request_id": "5a7f8447-459e-416e-b632-607a9fe46c30",
     "success": false
   },
-  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served",
+  "note": "the first request of a fresh process: 503 after the 15 s cold wait while the first build finished; retried, it was served"
 }

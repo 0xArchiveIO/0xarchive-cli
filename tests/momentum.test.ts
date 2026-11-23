@@ -8,8 +8,9 @@ import {
 import { MomentumClient } from '../src/lib/momentum.js';
 import { captureIo, lastError, ProcessExit, runCli, stdoutJson, stdoutText } from './helpers.js';
 
-// Responses of GET /v1/hyperliquid/factors/momentum, /current and /returns
-// (tests/fixtures/momentum), with the request each answers.
+// Responses of GET /v1/hyperliquid/factors/momentum, /current and /returns,
+// recorded from the API (tests/fixtures/momentum; score lists trimmed), with
+// the request each answers.
 interface Fixture {
   request: { path: string; query: Record<string, unknown> };
   status: number;
@@ -146,14 +147,17 @@ describe('oxa factors momentum', () => {
       const fetchMock = stubFetch(RETURNS_PAGE);
       const q = RETURNS_PAGE.request.query;
 
-      await momentumReturnsCommand({
+      const flags = {
         exchange: 'hyperliquid',
-        lookback: '7d',
+        lookback: String(q.lookback),
+        universe: String(q.universe),
         start: String(q.start),
         end: String(q.end),
+        interval: String(q.interval),
         limit: String(q.limit),
         format: 'json',
-      });
+      };
+      await momentumReturnsCommand(flags);
 
       expect(sent(fetchMock)).toEqual({ path: RETURNS_PAGE.request.path, query: asQuery(q) });
       const out = stdoutJson();
@@ -180,15 +184,7 @@ describe('oxa factors momentum', () => {
 
       // The next page: the same flags plus --cursor.
       vi.mocked(process.stdout.write).mockClear();
-      await momentumReturnsCommand({
-        exchange: 'hyperliquid',
-        lookback: '7d',
-        start: String(q.start),
-        end: String(q.end),
-        limit: String(q.limit),
-        cursor: out.nextCursor,
-        format: 'json',
-      });
+      await momentumReturnsCommand({ ...flags, cursor: out.nextCursor });
       expect(sent(fetchMock, 1).query).toEqual({ ...asQuery(q), cursor: RETURNS_PAGE.body.meta.next_cursor });
     });
 
@@ -355,6 +351,17 @@ describe('oxa factors momentum', () => {
       // Sent past local validation, as a client on an older CLI would.
       const client = new MomentumClient('test-key');
       await expect(client.get({ lookback: '28d' as '7d' })).rejects.toMatchObject({
+        code: 400,
+        errorCode: 'invalid_parameter',
+        param: 'lookback',
+        validValues: ['7d', '14d'],
+      });
+    });
+
+    it('keeps the API refusal of a request without a lookback', async () => {
+      stubFetch(fixture('missing_lookback'));
+      const client = new MomentumClient('test-key');
+      await expect(client.get({} as { lookback: '7d' })).rejects.toMatchObject({
         code: 400,
         errorCode: 'invalid_parameter',
         param: 'lookback',

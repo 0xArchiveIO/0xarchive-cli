@@ -153,7 +153,8 @@ export async function momentumReturnsCommand(options: MomentumReturnsOptions): P
       compact({ lookback: lb, universe, start, end, interval, cursor: options.cursor, limit, holdings }),
     );
     const { page, meta, records } = envelope(result);
-    const shownUniverse = universe ?? 'top25';
+    // The universe the records were built on, as served (top25 when none was asked for).
+    const shownUniverse = (field(records[0], 'universe') as string | undefined) ?? universe ?? 'top25';
     emitPage(page, { format, out: options.out }, { exchange, lookback: lb, universe: shownUniverse }, () => {
       prettyHeader(
         `Hyperliquid Momentum Factor Returns, ${lb} lookback, ${shownUniverse} (${records.length} buckets)`,

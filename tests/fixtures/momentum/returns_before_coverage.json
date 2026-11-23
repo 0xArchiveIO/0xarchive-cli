@@ -6,7 +6,7 @@
       "start": 1743465600000,
       "end": 1746057600000
     },
-    "plan": "pro",
+    "plan": "enterprise",
     "version": "2026-10-01"
   },
   "status": 200,
@@ -15,11 +15,12 @@
     "data": [],
     "meta": {
       "count": 0,
-      "request_id": "5ca1ab1e-0000-4000-8000-000000000001",
+      "request_id": "de691495-fb34-4c6b-8c2e-f7bafa305e2d",
       "coverage_from": "2025-05-24T01:00:00Z",
       "notice": "No data in the requested range. The Hyperliquid momentum factor's returns begin 2025-05-24 01:00 UTC; the request ends before then.",
       "has_more": false
     }
   },
-  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served",
+  "note": "every window that ends before 2025-05-24 01:00 UTC gets this response; the query is one such window"
 }

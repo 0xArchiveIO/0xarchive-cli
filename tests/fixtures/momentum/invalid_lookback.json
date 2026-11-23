@@ -4,7 +4,7 @@
     "query": {
       "lookback": "28d"
     },
-    "plan": "pro",
+    "plan": "enterprise",
     "version": "2026-10-01"
   },
   "status": 400,
@@ -13,12 +13,12 @@
     "error": "Invalid lookback '28d'. Use one of: 7d, 14d.",
     "error_code": "invalid_parameter",
     "param": "lookback",
-    "request_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "request_id": "b35e74da-1d42-42ac-b6ad-6ab9f4e6acb3",
     "success": false,
     "valid_values": [
       "7d",
       "14d"
     ]
   },
-  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served"
 }
