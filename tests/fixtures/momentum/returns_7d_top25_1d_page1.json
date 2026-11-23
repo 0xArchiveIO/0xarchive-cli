@@ -1,0 +1,74 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/returns",
+    "query": {
+      "lookback": "7d",
+      "start": 1793491200000,
+      "end": 1794268800000,
+      "limit": 3
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "timestamp": "2026-11-01T00:00:00.000Z",
+        "timestamp_ms": 1793491200000,
+        "calculated_at": "2026-11-02T00:00:00.000Z",
+        "calculated_at_ms": 1793577600000,
+        "lookback": "7d",
+        "universe": "top25",
+        "method": "momentum/1",
+        "ret": 0.0123,
+        "long_ret": 0.0185,
+        "short_ret": 0.0062,
+        "hours": 24,
+        "longs": 5,
+        "shorts": 5,
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-02T00:00:00.000Z",
+        "timestamp_ms": 1793577600000,
+        "calculated_at": "2026-11-03T00:00:00.000Z",
+        "calculated_at_ms": 1793664000000,
+        "lookback": "7d",
+        "universe": "top25",
+        "method": "momentum/1",
+        "ret": 0.0123,
+        "long_ret": 0.0185,
+        "short_ret": 0.0062,
+        "hours": 24,
+        "longs": 5,
+        "shorts": 5,
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-03T00:00:00.000Z",
+        "timestamp_ms": 1793664000000,
+        "calculated_at": "2026-11-04T00:00:00.000Z",
+        "calculated_at_ms": 1793750400000,
+        "lookback": "7d",
+        "universe": "top25",
+        "method": "momentum/1",
+        "ret": 0.0123,
+        "long_ret": 0.0185,
+        "short_ret": 0.0062,
+        "hours": 24,
+        "longs": 5,
+        "shorts": 5,
+        "is_final": true
+      }
+    ],
+    "meta": {
+      "count": 3,
+      "request_id": "c0ffee00-1234-4abc-9def-0123456789ab",
+      "has_more": true,
+      "next_cursor": "1793750400000"
+    }
+  },
+  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+}

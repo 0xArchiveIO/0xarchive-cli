@@ -1,0 +1,19 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/current",
+    "query": {
+      "lookback": "7d"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 503,
+  "body": {
+    "code": 503,
+    "error": "The momentum factor is still being prepared. Retry in a few seconds.",
+    "error_code": "upstream_unavailable",
+    "request_id": "7e7e7e7e-8888-4999-8aaa-bbbbccccdddd",
+    "success": false
+  },
+  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+}

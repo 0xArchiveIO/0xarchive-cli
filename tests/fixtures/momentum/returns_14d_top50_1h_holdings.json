@@ -1,0 +1,103 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/returns",
+    "query": {
+      "lookback": "14d",
+      "universe": "top50",
+      "interval": "1h",
+      "start": 1795168800000,
+      "end": 1795172400000,
+      "holdings": "true"
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "timestamp": "2026-11-20T10:00:00.000Z",
+        "timestamp_ms": 1795168800000,
+        "calculated_at": "2026-11-20T11:00:00.000Z",
+        "calculated_at_ms": 1795172400000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": 0.0123,
+        "long_ret": 0.0185,
+        "short_ret": 0.0062,
+        "hours": 1,
+        "longs": 5,
+        "shorts": 5,
+        "holdings": [
+          {
+            "symbol": "HYPE",
+            "weight": 0.31
+          },
+          {
+            "symbol": "SOL",
+            "weight": 0.24
+          },
+          {
+            "symbol": "BTC",
+            "weight": 0.45
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.52
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.48
+          }
+        ],
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-20T11:00:00.000Z",
+        "timestamp_ms": 1795172400000,
+        "calculated_at": "2026-11-20T12:00:00.000Z",
+        "calculated_at_ms": 1795176000000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": 0.0123,
+        "long_ret": 0.0185,
+        "short_ret": 0.0062,
+        "hours": 1,
+        "longs": 5,
+        "shorts": 5,
+        "holdings": [
+          {
+            "symbol": "HYPE",
+            "weight": 0.31
+          },
+          {
+            "symbol": "SOL",
+            "weight": 0.24
+          },
+          {
+            "symbol": "BTC",
+            "weight": 0.45
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.52
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.48
+          }
+        ],
+        "is_final": true
+      }
+    ],
+    "meta": {
+      "count": 2,
+      "request_id": "0d15ea5e-5eed-4c0d-8bad-f00dcafe0001",
+      "has_more": false
+    }
+  },
+  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+}

@@ -21,7 +21,7 @@ npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side l
 
 - **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`; Lighter has two deployments: mainnet and Robinhood Chain.
 - **Built for agents and scripts.** JSON by default, stable `error_code` values on failure, documented exit codes, and `--out` to write a file.
-- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification, plus trade intent, USDC flows, breadth above the n-day moving average and positioning on the Build plan and above.
+- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification, plus trade intent, USDC flows, breadth above the n-day moving average, positioning and the momentum factor on the Build plan and above.
 - **Streams and replay.** `oxa stream` subscribes to live WebSocket channels and replays history.
 - **Webhooks.** Create, dry-run and manage alert rules from the shell.
 - **Knows the coverage.** `oxa capabilities` says what each venue serves, over REST and WebSocket, and from when, with no key needed.
@@ -143,7 +143,7 @@ oxa orderbook history --exchange hip4 --symbol "$COIN" --start $HOUR_AGO --end $
 oxa instruments list --exchange rh-lighter
 ```
 
-A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`. USDC flows, which only Hyperliquid serves, keep the shared form, `oxa usdc-flows history|volume`, with `--exchange hyperliquid` as the default.
+A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`. USDC flows and the momentum factor, which only Hyperliquid serves, keep the shared form, `oxa usdc-flows history|volume` and `oxa factors momentum get|current|returns`, with `--exchange hyperliquid` as the default.
 
 The earlier forms keep working and run the same commands: `oxa trades fetch` (`oxa trades history`), `oxa candles`, `oxa prices`, and `oxa cvd <symbol>` (their `history`), `oxa summary` and `oxa freshness` (their `get`), `oxa instruments` and `oxa symbols` (their `list`), `oxa l3 ...` and `oxa accounts by-l1` (under `oxa lighter`), `oxa outcomes ...` (under `oxa hip4`), `oxa spot pair <symbol>` (`oxa spot pairs get`), and the Spot and HIP-4 market-data commands under `oxa spot` and `oxa hip4`.
 
@@ -154,6 +154,7 @@ Which venue serves which datatype, over REST and WebSocket, and from when, is `o
 Every command below works on every plan, including Free, with these exceptions:
 
 - The live `mempool` stream (`oxa stream subscribe mempool`) is included with the Pro, Scale and Enterprise plans.
+- The momentum factor (`oxa factors momentum`) is included with the Build, Pro, Scale and Enterprise plans. On Free, the API answers `forbidden` and the CLI exits with code 3, with the same error line as the four datasets below.
 - Four datasets are included with the Build, Pro, Scale and Enterprise plans: trade intent (`oxa trade-intent`), USDC flows (`oxa usdc-flows`), breadth above the n-day moving average (`oxa breadth above-ma`), and positioning (`oxa positioning`). On Free, the API answers `forbidden` and the CLI exits with code 3; the error line names the `datatype`, the `required_plans` and the `upgrade_url`.
 
 Apart from these, Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
@@ -413,6 +414,42 @@ The window ends at the newest 5-minute close, about 4 minutes behind now, given 
 |--------|----------|-------------|
 | `--exchange` | Yes | `hyperliquid` or `hip3` |
 | `--window` | Yes | `1h`, `4h`, or `24h` |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
+### `oxa factors momentum get`, `current` and `returns`
+
+The momentum factor on Hyperliquid perps (method `momentum/1`): every eligible perp's momentum score at an hour, and the return of the long-short momentum factor built from those scores. Hyperliquid only; `--exchange` defaults to `hyperliquid`. Included with the Build, Pro, Scale and Enterprise plans.
+
+`--lookback` is required on every command: `7d` or `14d`, the window the return is measured over. There is no default.
+
+```bash
+oxa factors momentum current --lookback 7d --format pretty
+oxa factors momentum get --lookback 14d --at $DAY_AGO
+oxa factors momentum returns --lookback 7d --start $WEEK_AGO --end $NOW
+oxa factors momentum returns --lookback 14d --universe top50 --interval 1h --start $DAY_AGO --end $NOW --holdings
+```
+
+`get` is one reading, as of the close of the hour at or before `--at` (default now; the newest reading is the last settled hour): every perp with 60 days of history and dollar volume in the 30 days before the universe pick in force, strongest first. Each record carries `ret` (the close-to-close return over the lookback), `vol` (hourly volatility over the last 30 days, not annualised), `score` (`ret` over `vol`, what the perps are ranked on), `pctRank` among them (ties averaged), `quintile` (5 is the long leg's cut, 1 the short leg's), and `inTop25` and `inTop50`, whether the perp is in the top-25 and top-50 universes. `current` is the newest reading and takes `--lookback` only.
+
+`returns` is the factor's return per bucket of `--interval` (`1d`, the default, or `1h`, on UTC boundaries), oldest first. The universe is the top 25 (`--universe top25`, the default) or top 50 (`top50`) perps by 30-day dollar volume, re-picked every 30 days, with delisted perps included while they traded. The factor is long the top fifth by score and short the bottom fifth, inverse-volatility weighted, and rebalanced every 168 hours (Saturdays 00:00 UTC, earning from 01:00). A bucket's `ret` is the sum of the factor's hourly returns over the `hours` it holds (simple, not compounded): `longRet` minus `shortRet`, where `shortRet` is what the short leg's perps did. `longs` and `shorts` are the legs' sizes in force at the bucket's last hour, and `calculatedAt` is that hour's close; the bucket still forming holds fewer `hours`. `--holdings` adds that rebalance's `holdings`: each perp and its `weight`, positive long and negative short, each leg summing to 1 in size. Returns are gross of fees and funding.
+
+Both start at 2025-05-24 01:00 UTC. A window that ends before then is empty, with `meta.coverageFrom` and `meta.notice`. `isFinal` says a record will not change: every hourly bar it is built from is final, so readings and buckets from about the last day are not final yet. The first request to a server that has just started can be answered with a retryable 503 (`The momentum factor is still being prepared`), exit code 4: retry after a few seconds.
+
+While `has_more` is true, run `returns` again with `--cursor <nextCursor>` and the same `--lookback`, `--universe`, `--start`, `--end`, and `--interval`. Set `--end` when paging: without it the window ends now and can slide.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | No | `hyperliquid` (the default and only venue) |
+| `--lookback` | Yes | `7d` or `14d` |
+| `--at` | No (`get`) | Time of the reading (ISO 8601 or Unix ms); defaults to now |
+| `--universe` | No (`returns`) | `top25` (default) or `top50` |
+| `--start` | No (`returns`) | Start time (ISO 8601 or Unix ms); defaults to 30 days before `--end` |
+| `--end` | No (`returns`) | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No (`returns`) | `1d` (default) or `1h` |
+| `--limit` | No (`returns`) | Buckets per page, 1 to 1,000 (default 100) |
+| `--cursor` | No (`returns`) | Pagination cursor from the previous response, with the same flags |
+| `--holdings` | No (`returns`) | Add each bucket's holdings and weights |
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 

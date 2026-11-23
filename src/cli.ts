@@ -56,6 +56,7 @@ import { breadthMaCurrentCommand, breadthMaHistoryCommand } from './commands/bre
 import { tradeIntentHistoryCommand } from './commands/trade-intent.js';
 import { usdcFlowsHistoryCommand, usdcFlowsVolumeCommand } from './commands/usdc-flows.js';
 import { positioningCurrentCommand } from './commands/positioning.js';
+import { momentumGetCommand, momentumCurrentCommand, momentumReturnsCommand } from './commands/momentum.js';
 import { walletsClassifyCommand, WALLET_SORTS } from './commands/wallets.js';
 import { symbolsCommand } from './commands/symbols.js';
 import {
@@ -461,6 +462,63 @@ program
   .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
   .option('--format <format>', 'Output format: json or pretty', 'json')
   .action(positioningCurrentCommand);
+
+// ── oxa factors momentum get / current / returns ───────────────────────
+
+const factors = program
+  .command('factors')
+  .description(`Factors on Hyperliquid perps: the momentum factor (Hyperliquid only; ${BUILD_AND_ABOVE})`);
+
+const momentum = factors
+  .command('momentum')
+  .description(
+    'Momentum scores of every eligible Hyperliquid perp, and the hourly returns of the long-short momentum factor (lookback 7d or 14d), gross of fees and funding, from 2025-05-24 01:00 UTC',
+  );
+
+const MOMENTUM_EXCHANGE_DESC = 'Exchange: hyperliquid (the only venue that serves the momentum factor)';
+const LOOKBACK_DESC = 'Momentum lookback: 7d or 14d (required)';
+
+momentum
+  .command('get')
+  .description(
+    'Get every eligible perp\'s reading as of the close of the hour at or before --at, strongest first: lookback return, 30-day hourly volatility, score, percentile rank, quintile, and top-25 and top-50 membership',
+  )
+  .option('--exchange <exchange>', MOMENTUM_EXCHANGE_DESC, 'hyperliquid')
+  .option('--lookback <lookback>', LOOKBACK_DESC)
+  .option('--at <time>', 'Time of the reading (ISO 8601 or Unix ms); defaults to now. The newest reading is the last settled hour')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(momentumGetCommand);
+
+momentum
+  .command('current')
+  .description('Get the newest reading of every eligible perp, strongest first')
+  .option('--exchange <exchange>', MOMENTUM_EXCHANGE_DESC, 'hyperliquid')
+  .option('--lookback <lookback>', LOOKBACK_DESC)
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(momentumCurrentCommand);
+
+momentum
+  .command('returns')
+  .description(
+    'Get the long-short momentum factor\'s return per bucket, oldest first: long the top fifth by score, short the bottom fifth, inverse-volatility weighted, rebalanced weekly; hourly returns summed, gross of fees and funding',
+  )
+  .option('--exchange <exchange>', MOMENTUM_EXCHANGE_DESC, 'hyperliquid')
+  .option('--lookback <lookback>', LOOKBACK_DESC)
+  .option('--universe <universe>', 'top25 (default) or top50: the top 25 or top 50 perps by 30-day dollar volume')
+  .option('--start <time>', 'Start time (ISO 8601 or Unix ms); defaults to 30 days before --end')
+  .option('--end <time>', 'End time (ISO 8601 or Unix ms); defaults to now')
+  .option('--interval <interval>', 'Bucket width: 1d (default) or 1h, on UTC boundaries')
+  .option('--limit <n>', 'Buckets per page, 1 to 1000 (default 100)')
+  .option('--cursor <cursor>', 'Pagination cursor from previous response (same --lookback, --universe, --start, --end and --interval)')
+  .option('--holdings', 'Add each bucket\'s holdings: every perp held at the bucket\'s last hour and its weight')
+  .option('--out <path>', 'Write JSON output to file')
+  .option('--api-key <key>', 'API key (or set OXA_API_KEY env var)')
+  .option('--format <format>', 'Output format: json or pretty', 'json')
+  .action(momentumReturnsCommand);
 
 // ── oxa funding current / history ───────────────────────────────────────
 

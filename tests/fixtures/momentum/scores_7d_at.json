@@ -1,0 +1,113 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum",
+    "query": {
+      "lookback": "7d",
+      "at": 1795176000000
+    },
+    "plan": "pro",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "symbol": "HYPE",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": 0.182,
+        "vol": 0.0121,
+        "score": 15.041322,
+        "pct_rank": 1,
+        "quintile": 5,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      },
+      {
+        "symbol": "SOL",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": 0.094,
+        "vol": 0.0087,
+        "score": 10.804598,
+        "pct_rank": 0.833333,
+        "quintile": 5,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      },
+      {
+        "symbol": "BTC",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": 0.031,
+        "vol": 0.0049,
+        "score": 6.326531,
+        "pct_rank": 0.666667,
+        "quintile": 4,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      },
+      {
+        "symbol": "ETH",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": -0.012,
+        "vol": 0.0068,
+        "score": -1.764706,
+        "pct_rank": 0.5,
+        "quintile": 3,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      },
+      {
+        "symbol": "DOGE",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": -0.071,
+        "vol": 0.0102,
+        "score": -6.960784,
+        "pct_rank": 0.333333,
+        "quintile": 2,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      },
+      {
+        "symbol": "XRP",
+        "timestamp": "2026-11-20T12:00:00.000Z",
+        "timestamp_ms": 1795176000000,
+        "lookback": "7d",
+        "method": "momentum/1",
+        "ret": -0.115,
+        "vol": 0.0095,
+        "score": -12.105263,
+        "pct_rank": 0.166667,
+        "quintile": 1,
+        "in_top25": true,
+        "in_top50": true,
+        "is_final": true
+      }
+    ],
+    "meta": {
+      "count": 6,
+      "request_id": "3a1f0c52-7d0e-4b8e-9b0e-2f5d6c1a9e01",
+      "has_more": false
+    }
+  },
+  "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
+}
