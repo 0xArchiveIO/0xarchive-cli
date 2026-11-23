@@ -105,8 +105,7 @@
     ],
     "meta": {
       "count": 6,
-      "request_id": "3a1f0c52-7d0e-4b8e-9b0e-2f5d6c1a9e01",
-      "has_more": false
+      "request_id": "3a1f0c52-7d0e-4b8e-9b0e-2f5d6c1a9e01"
     }
   },
   "recorded": "illustrative: built from the response shapes the API serves, pending recorded responses"
