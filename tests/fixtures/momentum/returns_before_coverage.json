@@ -1,0 +1,26 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/returns",
+    "query": {
+      "lookback": "7d",
+      "start": 1743465600000,
+      "end": 1746057600000
+    },
+    "plan": "enterprise",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [],
+    "meta": {
+      "count": 0,
+      "request_id": "de691495-fb34-4c6b-8c2e-f7bafa305e2d",
+      "coverage_from": "2025-05-24T01:00:00Z",
+      "notice": "No data in the requested range. The Hyperliquid momentum factor's returns begin 2025-05-24 01:00 UTC; the request ends before then.",
+      "has_more": false
+    }
+  },
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served",
+  "note": "every window that ends before 2025-05-24 01:00 UTC gets this response; the query is one such window"
+}

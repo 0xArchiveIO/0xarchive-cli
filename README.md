@@ -21,7 +21,7 @@ npx @0xarchive/cli positions market --exchange hyperliquid --symbol BTC --side l
 
 - **One grammar.** `oxa <datatype> <verb> --exchange <venue>`, with `get`, `current`, `history` and `list`. Venues are `hyperliquid`, `hip3`, `hip4`, `spot`, `lighter` and `rh-lighter`; Lighter has two deployments: mainnet and Robinhood Chain.
 - **Built for agents and scripts.** JSON by default, stable `error_code` values on failure, documented exit codes, and `--out` to write a file.
-- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification, plus trade intent, USDC flows, breadth above the n-day moving average and positioning on the Build plan and above.
+- **Every dataset.** Order books, trades, candles, funding, open interest, liquidations and their levels, L4 and L3 books, order flow, CVD, breadth, account positions and wallet classification, plus trade intent, USDC flows, breadth above the n-day moving average, positioning and the momentum factor on the Build plan and above.
 - **Streams and replay.** `oxa stream` subscribes to live WebSocket channels and replays history.
 - **Webhooks.** Create, dry-run and manage alert rules from the shell.
 - **Knows the coverage.** `oxa capabilities` says what each venue serves, over REST and WebSocket, and from when, with no key needed.
@@ -143,7 +143,7 @@ oxa orderbook history --exchange hip4 --symbol "$COIN" --start $HOUR_AGO --end $
 oxa instruments list --exchange rh-lighter
 ```
 
-A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`. USDC flows, which only Hyperliquid serves, keep the shared form, `oxa usdc-flows history|volume`, with `--exchange hyperliquid` as the default.
+A datatype that only one venue serves sits under that venue: `oxa hip4 outcomes`, `oxa hip4 questions`, `oxa spot pairs`, `oxa spot twap`, `oxa hip3 oracle`, `oxa lighter l3`, and `oxa lighter accounts`. USDC flows and the momentum factor, which only Hyperliquid serves, keep the shared form, `oxa usdc-flows history|volume` and `oxa factors momentum get|current|returns`, with `--exchange hyperliquid` as the default.
 
 The earlier forms keep working and run the same commands: `oxa trades fetch` (`oxa trades history`), `oxa candles`, `oxa prices`, and `oxa cvd <symbol>` (their `history`), `oxa summary` and `oxa freshness` (their `get`), `oxa instruments` and `oxa symbols` (their `list`), `oxa l3 ...` and `oxa accounts by-l1` (under `oxa lighter`), `oxa outcomes ...` (under `oxa hip4`), `oxa spot pair <symbol>` (`oxa spot pairs get`), and the Spot and HIP-4 market-data commands under `oxa spot` and `oxa hip4`.
 
@@ -154,6 +154,7 @@ Which venue serves which datatype, over REST and WebSocket, and from when, is `o
 Every command below works on every plan, including Free, with these exceptions:
 
 - The live `mempool` stream (`oxa stream subscribe mempool`) is included with the Pro, Scale and Enterprise plans.
+- The momentum factor (`oxa factors momentum`) is included with the Build, Pro, Scale and Enterprise plans. On Free, the API answers `forbidden` and the CLI exits with code 3, with the same error line as the four datasets below.
 - Four datasets are included with the Build, Pro, Scale and Enterprise plans: trade intent (`oxa trade-intent`), USDC flows (`oxa usdc-flows`), breadth above the n-day moving average (`oxa breadth above-ma`), and positioning (`oxa positioning`). On Free, the API answers `forbidden` and the CLI exits with code 3; the error line names the `datatype`, the `required_plans` and the `upgrade_url`.
 
 Apart from these, Free includes every market, route, schema, and served depth, with history limited to the most recent rolling 30 days and a maximum 30-day span per request or replay. Build and above keep the full retained archive. See [Pricing](https://www.0xarchive.io/pricing) for plan capacity.
@@ -416,6 +417,42 @@ The window ends at the newest 5-minute close, about 4 minutes behind now, given 
 | `--out` | No | Write JSON output to file |
 | `--format` | No | `json` (default) or `pretty` |
 
+### `oxa factors momentum get`, `current` and `returns`
+
+The momentum factor on Hyperliquid perps (method `momentum/1`): every eligible perp's momentum score at an hour, and the return of the long-short momentum factor built from those scores. Hyperliquid only; `--exchange` defaults to `hyperliquid`. Included with the Build, Pro, Scale and Enterprise plans.
+
+`--lookback` is required on every command: `7d` or `14d`, the window the return is measured over. There is no default.
+
+```bash
+oxa factors momentum current --lookback 7d --format pretty
+oxa factors momentum get --lookback 14d --at $DAY_AGO
+oxa factors momentum returns --lookback 7d --start $WEEK_AGO --end $NOW
+oxa factors momentum returns --lookback 14d --universe top50 --interval 1h --start $DAY_AGO --end $NOW --holdings
+```
+
+`get` is one reading, as of the close of the hour at or before `--at` (default now; the newest reading is the last settled hour): every perp with 60 days of history and dollar volume in the 30 days before the universe pick in force, strongest first. Each record carries `ret` (the close-to-close return over the lookback), `vol` (hourly volatility over the last 30 days, not annualised), `score` (`ret` over `vol`, what the perps are ranked on), `pctRank` among them (ties averaged), `quintile` (5 is the long leg's cut, 1 the short leg's), and `inTop25` and `inTop50`, whether the perp is in the top-25 and top-50 universes. `current` is the newest reading and takes `--lookback` only.
+
+`returns` is the factor's return per bucket of `--interval` (`1d`, the default, or `1h`, on UTC boundaries), oldest first. The universe is the top 25 (`--universe top25`, the default) or top 50 (`top50`) perps by 30-day dollar volume, re-picked every 30 days, with delisted perps included while they traded. The factor is long the top fifth by score and short the bottom fifth, inverse-volatility weighted, and rebalanced every 168 hours (Saturdays 00:00 UTC, earning from 01:00). A bucket's `ret` is the sum of the factor's hourly returns over the `hours` it holds (simple, not compounded): `longRet` minus `shortRet`, where `shortRet` is what the short leg's perps did. `longs` and `shorts` are the legs' sizes in force at the bucket's last hour, and `calculatedAt` is that hour's close; the bucket still forming holds fewer `hours`. `--holdings` adds that rebalance's `holdings`: each perp and its `weight`, positive long and negative short, each leg summing to 1 in size. Returns are gross of fees and funding.
+
+Both start at 2025-05-24 01:00 UTC. A window that ends before then is empty, with `meta.coverageFrom` and `meta.notice`. `isFinal` says a record will not change: every hourly bar it is built from is final, so readings and buckets from about the last day are not final yet. While the API prepares the factor it can briefly answer a retryable 503 (`The momentum factor is still being prepared`), exit code 4: retry after a few seconds.
+
+While `has_more` is true, run `returns` again with `--cursor <nextCursor>` and the same `--lookback`, `--universe`, `--start`, `--end`, and `--interval`. Set `--end` when paging: without it the window ends now and can slide.
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--exchange` | No | `hyperliquid` (the default and only venue) |
+| `--lookback` | Yes | `7d` or `14d` |
+| `--at` | No (`get`) | Time of the reading (ISO 8601 or Unix ms); defaults to now |
+| `--universe` | No (`returns`) | `top25` (default) or `top50` |
+| `--start` | No (`returns`) | Start time (ISO 8601 or Unix ms); defaults to 30 days before `--end` |
+| `--end` | No (`returns`) | End time (ISO 8601 or Unix ms); defaults to now |
+| `--interval` | No (`returns`) | `1d` (default) or `1h` |
+| `--limit` | No (`returns`) | Buckets per page, 1 to 1,000 (default 100) |
+| `--cursor` | No (`returns`) | Pagination cursor from the previous response, with the same flags |
+| `--holdings` | No (`returns`) | Add each bucket's holdings and weights |
+| `--out` | No | Write JSON output to file |
+| `--format` | No | `json` (default) or `pretty` |
+
 ### `oxa funding current`
 
 Get the current funding rate.
@@ -665,6 +702,10 @@ oxa positions get --exchange hyperliquid --address 0xYourWallet --timestamp $HOU
 oxa positions history --exchange lighter --account 42 --start $DAY_AGO --end $NOW
 oxa positions changes --exchange hyperliquid --address 0xYourWallet --start $DAY_AGO --end $NOW --symbol BTC
 
+# Funding a wallet paid or received (Hyperliquid and HIP-3, at most 31 days per request)
+oxa positions funding-payments --exchange hyperliquid --address 0xYourWallet --start $DAY_AGO --end $NOW --symbol BTC
+oxa positions funding-payments --exchange hip3 --address 0xYourWallet --dex xyz --start $DAY_AGO --end $NOW
+
 # Every open position in one market, largest first, with totals on the first page
 oxa positions market --exchange hyperliquid --symbol BTC --side long --min-value 1000000
 oxa positions market --exchange lighter --symbol ETH --hour $LAST_HOUR
@@ -686,6 +727,7 @@ oxa positions account-history --exchange hyperliquid --address 0xYourWallet --st
 | `oxa positions get` | all four | Open positions at the latest snapshot or as of `--timestamp`, plus the account summary on the first page of a snapshot read: on Hyperliquid always, on HIP-3 with `--dex` (or a dex-prefixed `--symbol`), and on Lighter the account's position totals when no `--symbol` is set. Filters: `--symbol`, `--dex` (HIP-3). |
 | `oxa positions history` | all four | Hourly position snapshots in `[--start, --end)`. Filters: `--symbol`, `--dex` (HIP-3); `--limit`, `--cursor`. |
 | `oxa positions changes` | all four | Change log: every fill leg on the position, with the size before and after, the entry price after, realized PnL, and fees, in `[--start, --end)`. On Lighter, a leg that leaves the size unchanged is included too, with `eventType` `settlement` (the settled side of a market settlement) or `unchanged`. |
+| `oxa positions funding-payments` | `hyperliquid`, `hip3` | The funding one wallet paid or received: one row per position per hourly settlement, in `[--start, --end)`. `fundingAmount` is positive when the wallet received funding and negative when it paid. At most 31 days per request; page through a longer history one window at a time, and follow `nextCursor` with unchanged flags. Filters: `--symbol` (HIP-3: `dex:COIN`), `--dex` (HIP-3); `--limit` (default 500, max 5,000), `--cursor`. Lighter has no wallet funding payments. Billed at one credit per 1,000 rows, with a minimum of one credit per request. |
 | `oxa positions market` | all four | Every open position in one `--symbol`, sorted by position value, at the latest snapshot or at `--hour`. Filters: `--side long` or `--side short`, `--min-value <usd>`, `--include-system` (Lighter). |
 | `oxa positions summary` | all four | Long and short counts, sizes, values, average entries, and top-10 share for one `--symbol`: the latest snapshot, or hourly over `--start`/`--end`. |
 | `oxa positions all` | all four | Every open position across markets at one `--hour` (an exact UTC hour). |
@@ -700,6 +742,8 @@ Coverage:
 | HIP-3 (`hip3`) | 2025-10-13 | 2026-06-07 | every 5 minutes |
 | Lighter mainnet (`lighter`) | 2025-01-17 | 2025-01-17 | every 2 minutes |
 | Lighter on Robinhood Chain (`rh-lighter`) | 2026-06-26 | 2026-06-26 | every 2 minutes |
+
+Wallet funding payments start at 2025-09-27 10:00 UTC on Hyperliquid and 2025-10-13 13:00 UTC on HIP-3. A window that ends before that returns no rows, with `meta.coverageFrom` and `meta.notice`.
 
 How to read the results:
 
@@ -1256,6 +1300,35 @@ oxa stream replay lighter_orderbook ETH --start $HOUR_AGO --end $(( HOUR_AGO + 6
 | `--format` | No | `json` (NDJSON, default) or `pretty` |
 
 Replayable channels are the ones `oxa capabilities` lists with replay; the CLI reads them from the SDK's channel table, which mirrors `/v1/capabilities`. Timed channels keep their original timing, scaled by `--speed`: `orderbook`, `trades`, `candles`, `liquidations`, `open_interest`, `funding` (Hyperliquid); `hip3_orderbook`, `hip3_trades`, `hip3_candles`, `hip3_open_interest`, `hip3_funding`, `hip3_liquidations` (HIP-3); `hip4_orderbook`, `hip4_trades`, `hip4_open_interest` (HIP-4); the six `lighter_*` and five `rh_lighter_*` channels. Bulk channels replay as fast as they are read, with `--speed` ignored: every L4 channel on every venue (`l4_diffs`, `l4_orders`, `hip3_l4_diffs`, `hip3_l4_orders`, `hip4_l4_diffs`, `hip4_l4_orders`, `spot_l4_diffs`, `spot_l4_orders`) and the full-depth books (`orderbook_full`, `hip3_orderbook_full`). A bulk replay starts with an `l4_snapshot` from the nearest checkpoint at or before `--start` and sends `l4_batch` pages in block order until `--end`. The live-only channels (`ticker`, `all_tickers`, `spot_orderbook`, `spot_trades`, `mempool`) and the REST-only `spot_twap` are refused before a socket is opened, with a pointer to the REST commands that serve their history where there is one. On Free, replay covers the most recent rolling 30 days with a maximum 30-day span.
+
+### `oxa bench` (measure Stream from your machine)
+
+Measure 0xArchive Stream against Hyperliquid's own public WebSocket from your own machine. `oxa bench` opens both feeds side by side in one process, subscribes them to the same Hyperliquid perp coins, and matches every trade on coin and trade id. Both receipt times come from the same clock, so the head start needs no clock sync.
+
+```bash
+oxa bench                                   # BTC, ETH, SOL and HYPE for 120 s, readable summary
+oxa bench --duration 600                    # 10 minutes
+oxa bench --coins BTC,ETH --book            # add the L4 book check after the race
+oxa bench --json > bench.json               # one JSON document with every figure
+```
+
+What it reports:
+
+- **Matched trades** and how often **Stream arrived first**, with the head start at p10, p50, p90 and p99 (Hyperliquid's receipt time minus Stream's; positive means Stream was first).
+- **Identical payloads**: matched trades whose price, size, trade time and transaction hash agree on both feeds.
+- **Seen on one feed only**: trades the other feed did not deliver within 10 seconds. **Arrived late** counts those whose copy came later, within 2 minutes. A trade that goes missing while a feed is down, or in the first 15 seconds after it connects, is listed as not counted instead of being counted against that feed.
+- **Block to arrival** on both feeds: receipt time minus Hyperliquid's trade time. This reads your machine's clock, so the summary shows the clock's error bound when chrony or systemd-timesyncd reports one.
+- **Reconnects** and the share of the run each connection was open.
+
+It also times Stream's L4 order book diffs from block to arrival (`--no-l4` skips this). `--book` then rebuilds Stream's L4 book from its snapshot and diffs, one coin at a time for `--book-seconds` (default 60), and compares it with Hyperliquid's own `l2Book`: price, total size and order count on each of the top 20 levels per side. A match shows the rebuilt book agrees with the venue at the level detail the venue publishes; Hyperliquid publishes no per-order book to compare individual orders with.
+
+Connections and access:
+
+- The race holds two Stream connections at once, one for trades and one for L4 diffs (one with `--no-l4`), and the book check then uses one. They count toward your plan's connection limit. Before the race starts, `oxa bench` checks that your account can open them; when the limit is already taken by other sessions, it exits with code 4 and names the limit.
+- Your API key goes only to the Stream endpoint and is never printed. A refused key exits with code 3 before the race starts.
+- Stream serves live data only. On Free, from November 23, 2026, after an account's first 30 days, live data needs Build: Stream refuses the connection and `oxa bench` exits with code 3 with the reason.
+- Hyperliquid's feed is `wss://api.hyperliquid.xyz/ws` and Stream is `wss://stream.0xarchive.io/ws`. Override them with `--hl-url` and `--stream-url`.
+- `oxa bench` needs Node.js 22 or newer for its built-in WebSocket client.
 
 ### `oxa webhooks ...`
 

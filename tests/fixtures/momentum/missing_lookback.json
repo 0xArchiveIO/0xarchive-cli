@@ -1,0 +1,22 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum",
+    "query": {},
+    "plan": "enterprise",
+    "version": "2026-10-01"
+  },
+  "status": 400,
+  "body": {
+    "code": 400,
+    "error": "lookback is required: 7d or 14d.",
+    "error_code": "invalid_parameter",
+    "param": "lookback",
+    "request_id": "06fd0b70-2de3-4e18-aaee-34cc2ba73b4f",
+    "success": false,
+    "valid_values": [
+      "7d",
+      "14d"
+    ]
+  },
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served"
+}

@@ -1,0 +1,436 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/returns",
+    "query": {
+      "lookback": "14d",
+      "universe": "top50",
+      "start": 1794700800000,
+      "end": 1794711600000,
+      "interval": "1h",
+      "holdings": "true"
+    },
+    "plan": "enterprise",
+    "version": "2026-10-01"
+  },
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": [
+      {
+        "timestamp": "2026-11-15T00:00:00.000Z",
+        "timestamp_ms": 1794700800000,
+        "calculated_at": "2026-11-15T01:00:00.000Z",
+        "calculated_at_ms": 1794704400000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": 0.00478299440215793,
+        "long_ret": -0.004898041668295541,
+        "short_ret": -0.009681036070453472,
+        "hours": 1,
+        "longs": 11,
+        "shorts": 10,
+        "holdings": [
+          {
+            "symbol": "STRK",
+            "weight": 0.04284703770636011
+          },
+          {
+            "symbol": "kPEPE",
+            "weight": 0.05507155076196776
+          },
+          {
+            "symbol": "WLFI",
+            "weight": 0.0952847408385254
+          },
+          {
+            "symbol": "TRX",
+            "weight": 0.15081276681161643
+          },
+          {
+            "symbol": "AVAX",
+            "weight": 0.08619585032783864
+          },
+          {
+            "symbol": "ZRO",
+            "weight": 0.048205526399143474
+          },
+          {
+            "symbol": "USELESS",
+            "weight": 0.03923563507631862
+          },
+          {
+            "symbol": "PAXG",
+            "weight": 0.30253737077998366
+          },
+          {
+            "symbol": "JUP",
+            "weight": 0.07358217681588095
+          },
+          {
+            "symbol": "INJ",
+            "weight": 0.05927543934606055
+          },
+          {
+            "symbol": "LIT",
+            "weight": 0.04695190513630445
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.12074414476877986
+          },
+          {
+            "symbol": "BCH",
+            "weight": -0.09239641160603865
+          },
+          {
+            "symbol": "SOL",
+            "weight": -0.11670342044290342
+          },
+          {
+            "symbol": "XPL",
+            "weight": -0.05809350900634609
+          },
+          {
+            "symbol": "TRUMP",
+            "weight": -0.06767066118816953
+          },
+          {
+            "symbol": "BTC",
+            "weight": -0.17808190579268834
+          },
+          {
+            "symbol": "CASHCAT",
+            "weight": -0.03786635863851645
+          },
+          {
+            "symbol": "ETH",
+            "weight": -0.12716178026806635
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.11491739107491802
+          },
+          {
+            "symbol": "HYPE",
+            "weight": -0.08636441721357331
+          }
+        ],
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-15T01:00:00.000Z",
+        "timestamp_ms": 1794704400000,
+        "calculated_at": "2026-11-15T02:00:00.000Z",
+        "calculated_at_ms": 1794708000000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": 0.003799679880665527,
+        "long_ret": -0.008439830907541308,
+        "short_ret": -0.012239510788206839,
+        "hours": 1,
+        "longs": 11,
+        "shorts": 10,
+        "holdings": [
+          {
+            "symbol": "STRK",
+            "weight": 0.04284703770636011
+          },
+          {
+            "symbol": "kPEPE",
+            "weight": 0.05507155076196776
+          },
+          {
+            "symbol": "WLFI",
+            "weight": 0.0952847408385254
+          },
+          {
+            "symbol": "TRX",
+            "weight": 0.15081276681161643
+          },
+          {
+            "symbol": "AVAX",
+            "weight": 0.08619585032783864
+          },
+          {
+            "symbol": "ZRO",
+            "weight": 0.048205526399143474
+          },
+          {
+            "symbol": "USELESS",
+            "weight": 0.03923563507631862
+          },
+          {
+            "symbol": "PAXG",
+            "weight": 0.30253737077998366
+          },
+          {
+            "symbol": "JUP",
+            "weight": 0.07358217681588095
+          },
+          {
+            "symbol": "INJ",
+            "weight": 0.05927543934606055
+          },
+          {
+            "symbol": "LIT",
+            "weight": 0.04695190513630445
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.12074414476877986
+          },
+          {
+            "symbol": "BCH",
+            "weight": -0.09239641160603865
+          },
+          {
+            "symbol": "SOL",
+            "weight": -0.11670342044290342
+          },
+          {
+            "symbol": "XPL",
+            "weight": -0.05809350900634609
+          },
+          {
+            "symbol": "TRUMP",
+            "weight": -0.06767066118816953
+          },
+          {
+            "symbol": "BTC",
+            "weight": -0.17808190579268834
+          },
+          {
+            "symbol": "CASHCAT",
+            "weight": -0.03786635863851645
+          },
+          {
+            "symbol": "ETH",
+            "weight": -0.12716178026806635
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.11491739107491802
+          },
+          {
+            "symbol": "HYPE",
+            "weight": -0.08636441721357331
+          }
+        ],
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-15T02:00:00.000Z",
+        "timestamp_ms": 1794708000000,
+        "calculated_at": "2026-11-15T03:00:00.000Z",
+        "calculated_at_ms": 1794711600000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": -0.015223988465962571,
+        "long_ret": 0.02979449771810841,
+        "short_ret": 0.045018486184070984,
+        "hours": 1,
+        "longs": 11,
+        "shorts": 10,
+        "holdings": [
+          {
+            "symbol": "STRK",
+            "weight": 0.04284703770636011
+          },
+          {
+            "symbol": "kPEPE",
+            "weight": 0.05507155076196776
+          },
+          {
+            "symbol": "WLFI",
+            "weight": 0.0952847408385254
+          },
+          {
+            "symbol": "TRX",
+            "weight": 0.15081276681161643
+          },
+          {
+            "symbol": "AVAX",
+            "weight": 0.08619585032783864
+          },
+          {
+            "symbol": "ZRO",
+            "weight": 0.048205526399143474
+          },
+          {
+            "symbol": "USELESS",
+            "weight": 0.03923563507631862
+          },
+          {
+            "symbol": "PAXG",
+            "weight": 0.30253737077998366
+          },
+          {
+            "symbol": "JUP",
+            "weight": 0.07358217681588095
+          },
+          {
+            "symbol": "INJ",
+            "weight": 0.05927543934606055
+          },
+          {
+            "symbol": "LIT",
+            "weight": 0.04695190513630445
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.12074414476877986
+          },
+          {
+            "symbol": "BCH",
+            "weight": -0.09239641160603865
+          },
+          {
+            "symbol": "SOL",
+            "weight": -0.11670342044290342
+          },
+          {
+            "symbol": "XPL",
+            "weight": -0.05809350900634609
+          },
+          {
+            "symbol": "TRUMP",
+            "weight": -0.06767066118816953
+          },
+          {
+            "symbol": "BTC",
+            "weight": -0.17808190579268834
+          },
+          {
+            "symbol": "CASHCAT",
+            "weight": -0.03786635863851645
+          },
+          {
+            "symbol": "ETH",
+            "weight": -0.12716178026806635
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.11491739107491802
+          },
+          {
+            "symbol": "HYPE",
+            "weight": -0.08636441721357331
+          }
+        ],
+        "is_final": true
+      },
+      {
+        "timestamp": "2026-11-15T03:00:00.000Z",
+        "timestamp_ms": 1794711600000,
+        "calculated_at": "2026-11-15T04:00:00.000Z",
+        "calculated_at_ms": 1794715200000,
+        "lookback": "14d",
+        "universe": "top50",
+        "method": "momentum/1",
+        "ret": -0.004175263808994982,
+        "long_ret": -0.00007245562508341713,
+        "short_ret": 0.004102808183911565,
+        "hours": 1,
+        "longs": 11,
+        "shorts": 10,
+        "holdings": [
+          {
+            "symbol": "STRK",
+            "weight": 0.04284703770636011
+          },
+          {
+            "symbol": "kPEPE",
+            "weight": 0.05507155076196776
+          },
+          {
+            "symbol": "WLFI",
+            "weight": 0.0952847408385254
+          },
+          {
+            "symbol": "TRX",
+            "weight": 0.15081276681161643
+          },
+          {
+            "symbol": "AVAX",
+            "weight": 0.08619585032783864
+          },
+          {
+            "symbol": "ZRO",
+            "weight": 0.048205526399143474
+          },
+          {
+            "symbol": "USELESS",
+            "weight": 0.03923563507631862
+          },
+          {
+            "symbol": "PAXG",
+            "weight": 0.30253737077998366
+          },
+          {
+            "symbol": "JUP",
+            "weight": 0.07358217681588095
+          },
+          {
+            "symbol": "INJ",
+            "weight": 0.05927543934606055
+          },
+          {
+            "symbol": "LIT",
+            "weight": 0.04695190513630445
+          },
+          {
+            "symbol": "XRP",
+            "weight": -0.12074414476877986
+          },
+          {
+            "symbol": "BCH",
+            "weight": -0.09239641160603865
+          },
+          {
+            "symbol": "SOL",
+            "weight": -0.11670342044290342
+          },
+          {
+            "symbol": "XPL",
+            "weight": -0.05809350900634609
+          },
+          {
+            "symbol": "TRUMP",
+            "weight": -0.06767066118816953
+          },
+          {
+            "symbol": "BTC",
+            "weight": -0.17808190579268834
+          },
+          {
+            "symbol": "CASHCAT",
+            "weight": -0.03786635863851645
+          },
+          {
+            "symbol": "ETH",
+            "weight": -0.12716178026806635
+          },
+          {
+            "symbol": "DOGE",
+            "weight": -0.11491739107491802
+          },
+          {
+            "symbol": "HYPE",
+            "weight": -0.08636441721357331
+          }
+        ],
+        "is_final": true
+      }
+    ],
+    "meta": {
+      "count": 4,
+      "request_id": "9182dadc-a899-402d-892c-5135ec5bbeb4",
+      "has_more": false
+    }
+  },
+  "recorded": "2026-11-23 16:12 UTC against a staging deployment of the production API build with the momentum factor served",
+  "note": "start and end were sent as RFC 3339 (2026-11-15T00:00:00Z, 2026-11-15T03:00:00Z), the instants the query gives in Unix ms"
+}

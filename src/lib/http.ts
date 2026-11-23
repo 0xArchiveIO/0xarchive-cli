@@ -66,6 +66,9 @@ export function apiError(status: number, body: unknown): OxArchiveError {
   if (typeof b.errorCode === 'string') extra.errorCode = b.errorCode;
   if (typeof b.param === 'string') extra.param = b.param;
   if (Array.isArray(b.validValues)) extra.validValues = b.validValues.filter((v) => typeof v === 'string');
+  // The whole body, as the SDK keeps it, so a plan refusal's `requiredPlans`,
+  // `upgradeUrl`, `reason` and `dataEndsOn` reach the error line.
+  extra.body = b;
   return Object.assign(error, extra);
 }
 

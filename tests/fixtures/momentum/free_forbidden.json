@@ -1,0 +1,27 @@
+{
+  "request": {
+    "path": "/v1/hyperliquid/factors/momentum/current",
+    "query": {
+      "lookback": "7d"
+    },
+    "plan": "free",
+    "version": "2026-10-01"
+  },
+  "status": 403,
+  "body": {
+    "code": 403,
+    "datatype": "momentum",
+    "error": "Momentum factor is included with the Build, Pro, Scale and Enterprise plans. Upgrade at https://0xarchive.io/pricing.",
+    "error_code": "forbidden",
+    "request_id": "f0f0f0f0-1111-4222-8333-444455556666",
+    "required_plans": [
+      "build",
+      "pro",
+      "scale",
+      "enterprise"
+    ],
+    "success": false,
+    "upgrade_url": "https://0xarchive.io/pricing"
+  },
+  "recorded": "not recorded: the recordings used a key on a paid plan. Built from the API plan refusal every Build-and-above dataset returns (403 forbidden with datatype, required_plans and upgrade_url), with the momentum datatype and its label; the request_id is a placeholder"
+}
